@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased selection:bg-brand-orange-200 dark:selection:bg-brand-orange-900/30 selection:text-brand-orange-800 dark:selection:text-brand-orange-300;
+  }
+}
+
+/* Glassmorphism card utility */
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(229, 231, 235, 0.6);
+}
+
+.dark .glass-card {
+  background: rgba(24, 24, 28, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(39, 39, 42, 0.6);
+}
+
+/* Custom glow effects similar to ProtectQube AI and VoiceGuard */
+.glow-orange {
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.15);
+}
+
+.dark .glow-orange {
+  box-shadow: 0 0 25px rgba(249, 115, 22, 0.2);
+}
+
+.glow-orange-lg {
+  box-shadow: 0 0 35px rgba(249, 115, 22, 0.25);
+}
+
+.dark .glow-orange-lg {
+  box-shadow: 0 0 45px rgba(249, 115, 22, 0.35);
+}
+
+/* Orange border active glow */
+.active-border-glow {
+  border-color: rgba(249, 115, 22, 0.8);
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.25);
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.5);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(249, 115, 22, 0.6);
+}
+
+/* Custom transitions */
+.transition-all-200 {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}

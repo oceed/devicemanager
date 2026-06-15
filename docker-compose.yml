@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: device-manager-backend
+    network_mode: host
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      # Map dbus system socket to allow container to control host NetworkManager
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
+      # Map sys filesystem to read thermal zones and NPU loads
+      - /sys:/sys
+      # Optional: map NetworkManager configs if needed to read profile files
+      - /etc/NetworkManager:/etc/NetworkManager
+    environment:
+      - SECRET_KEY=supersecretkey_protectqube_voiceguard_orange_pi
+      - ADMIN_USERNAME=admin
+      # bcrypt hash for "admin123"
+      - ADMIN_PASSWORD_HASH=$$2b$$12$$Z0mU6n5xYp4tA9DqT2QYGeB1p9o6r9y0s1l2q3w4e5r6t7y8u9i0o
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: device-manager-frontend
+    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
