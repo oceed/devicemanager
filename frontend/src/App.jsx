@@ -7,8 +7,16 @@ import WifiTab from './components/WifiTab';
 import ApTab from './components/ApTab';
 import VpnTab from './components/VpnTab';
 import RecoveryTab from './components/RecoveryTab';
+import Portal from './components/Portal';
 
 export default function App() {
+  // Render portal if on port 80 (default) or query includes ?portal
+  const isPortal = window.location.port === '' || window.location.port === '80' || window.location.search.includes('portal');
+
+  if (isPortal) {
+    return <Portal />;
+  }
+
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [activeTab, setActiveTab] = useState('dashboard');
   const [darkMode, setDarkMode] = useState(

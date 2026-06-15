@@ -8,8 +8,7 @@ RUN npm run build
 
 # Stage 2: Serve with Nginx
 FROM nginx:1.25-alpine
-COPY --from=builder /app/dist /usr/share/nginx/html/admin
-COPY --from=builder /app/portal /usr/share/nginx/html/portal
+COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80 8081
 CMD ["nginx", "-g", "daemon off;"]
