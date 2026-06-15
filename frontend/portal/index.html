@@ -11,21 +11,21 @@
         :root {
             /* Colors for Dark Theme (Default) */
             --bg-primary: #050507;
-            --bg-secondary: #0c0d12;
-            --card-bg: rgba(15, 17, 26, 0.7);
+            --bg-secondary: #0b0c10;
+            --card-bg: rgba(10, 11, 16, 0.75);
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
             --accent: #ff6b00;
-            --accent-glow: rgba(255, 107, 0, 0.15);
-            --border-color: rgba(255, 255, 255, 0.04);
-            --card-shadow: rgba(0, 0, 0, 0.6);
-            --status-bg-online: rgba(16, 185, 129, 0.1);
+            --accent-glow: rgba(255, 107, 0, 0.12);
+            --border-color: rgba(255, 255, 255, 0.05);
+            --card-shadow: rgba(0, 0, 0, 0.7);
+            --grid-color: rgba(255, 255, 255, 0.015);
+            --status-bg-online: rgba(16, 185, 129, 0.08);
             --status-text-online: #34d399;
-            --status-bg-offline: rgba(239, 68, 68, 0.1);
+            --status-bg-offline: rgba(239, 68, 68, 0.08);
             --status-text-offline: #f87171;
             --btn-disabled-bg: rgba(255, 255, 255, 0.02);
             --btn-disabled-text: #475569;
-            
             --transition-speed: 0.3s;
         }
 
@@ -33,16 +33,17 @@
             /* Colors for Light Theme (Orange & White) */
             --bg-primary: #f8fafc;
             --bg-secondary: #ffffff;
-            --card-bg: rgba(255, 255, 255, 0.9);
+            --card-bg: rgba(255, 255, 255, 0.95);
             --text-primary: #0f172a;
             --text-secondary: #64748b;
             --accent: #ff6b00;
-            --accent-glow: rgba(255, 107, 0, 0.1);
-            --border-color: rgba(15, 23, 42, 0.06);
-            --card-shadow: rgba(15, 23, 42, 0.05);
-            --status-bg-online: rgba(16, 185, 129, 0.15);
+            --accent-glow: rgba(255, 107, 0, 0.08);
+            --border-color: rgba(15, 23, 42, 0.07);
+            --card-shadow: rgba(15, 23, 42, 0.03);
+            --grid-color: rgba(0, 0, 0, 0.02);
+            --status-bg-online: rgba(16, 185, 129, 0.12);
             --status-text-online: #059669;
-            --status-bg-offline: rgba(220, 38, 38, 0.15);
+            --status-bg-offline: rgba(220, 38, 38, 0.12);
             --status-text-offline: #dc2626;
             --btn-disabled-bg: #f1f5f9;
             --btn-disabled-text: #94a3b8;
@@ -69,6 +70,22 @@
             overflow-x: hidden;
         }
 
+        /* Tech Grid Background System */
+        body::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 32px 32px;
+            background-position: center;
+            -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 70%);
+            mask-image: radial-gradient(circle at center, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 70%);
+            z-index: 1;
+            pointer-events: none;
+        }
+
         /* Ambient Glowing Background Lights */
         .glow-lights {
             position: absolute;
@@ -83,29 +100,19 @@
 
         .glow-light-1 {
             position: absolute;
-            top: -200px;
-            left: 10%;
-            width: 600px;
-            height: 600px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(255, 107, 0, 0.07) 0%, rgba(255, 107, 0, 0) 70%);
-        }
-
-        .glow-light-2 {
-            position: absolute;
-            bottom: -200px;
-            right: 10%;
-            width: 600px;
-            height: 600px;
+            top: -300px;
+            left: 15%;
+            width: 500px;
+            height: 500px;
             border-radius: 50%;
             background: radial-gradient(circle, rgba(255, 107, 0, 0.05) 0%, rgba(255, 107, 0, 0) 70%);
         }
 
-        /* Top Header Control Area */
+        /* Top Header Area */
         header {
             position: absolute;
-            top: 2rem;
-            right: 2rem;
+            top: 1.5rem;
+            right: 1.5rem;
             z-index: 100;
         }
 
@@ -113,13 +120,13 @@
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             color: var(--text-primary);
-            padding: 0.75rem;
+            padding: 0.6rem;
             border-radius: 50%;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px var(--card-shadow);
+            box-shadow: 0 4px 10px var(--card-shadow);
             transition: transform 0.2s ease, border-color 0.2s;
         }
 
@@ -129,8 +136,8 @@
         }
 
         .theme-toggle-btn svg {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             fill: none;
             stroke: currentColor;
             stroke-width: 2;
@@ -139,38 +146,37 @@
         /* Main Container */
         .container {
             width: 100%;
-            max-width: 1200px;
-            padding: 4rem 2rem;
+            max-width: 1000px;
+            padding: 3rem 1.5rem;
             text-align: center;
             z-index: 10;
         }
 
-        /* Brand Title & Header */
+        /* Brand Header Section */
         .brand-section {
-            margin-bottom: 5rem;
-            position: relative;
+            margin-bottom: 3rem;
         }
 
         .logo-tag {
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.25em;
+            letter-spacing: 0.2em;
             color: var(--accent);
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
             display: inline-block;
         }
 
         h1 {
-            font-size: 3rem;
+            font-size: 2.25rem;
             font-weight: 800;
             letter-spacing: -0.03em;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
             line-height: 1.1;
         }
         
         [data-theme="dark"] h1 {
-            background: linear-gradient(135deg, #ffffff 40%, #ff8c3a 100%);
+            background: linear-gradient(135deg, #ffffff 50%, #ff8c3a 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -181,31 +187,31 @@
 
         p.subtitle {
             color: var(--text-secondary);
-            font-size: 1.1rem;
+            font-size: 0.95rem;
             font-weight: 400;
-            max-width: 600px;
+            max-width: 500px;
             margin: 0 auto;
-            line-height: 1.5;
+            line-height: 1.4;
         }
 
-        /* Grid Layout for Cards */
+        /* Cards Grid */
         .cards-grid {
             display: flex;
             justify-content: center;
             align-items: stretch;
-            gap: 2.5rem;
+            gap: 1.5rem;
             flex-wrap: wrap;
         }
 
-        /* Premium Aesthetic Card Design */
+        /* Tech Aesthetic Card Design - More Compact */
         .card {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 32px;
-            padding: 3rem 2.25rem 2.5rem;
-            width: 350px;
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 2.25rem 1.5rem 1.75rem;
+            width: 290px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), 
                         border-color 0.4s ease, 
                         box-shadow 0.4s ease;
@@ -213,17 +219,17 @@
             flex-direction: column;
             align-items: center;
             position: relative;
-            box-shadow: 0 10px 40px var(--card-shadow);
-            text-align: center;
+            box-shadow: 0 8px 30px var(--card-shadow);
         }
 
+        /* Fine Border Gradient Overlay */
         .card::before {
             content: '';
             position: absolute;
             inset: 0;
-            border-radius: 32px;
-            padding: 1.5px;
-            background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0));
+            border-radius: 24px;
+            padding: 1px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0));
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
@@ -231,139 +237,131 @@
         }
 
         [data-theme="light"] .card::before {
-            background: linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.01));
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.01));
         }
 
         .card:hover {
-            transform: translateY(-10px);
-            border-color: rgba(255, 107, 0, 0.4);
-            box-shadow: 0 20px 50px var(--accent-glow);
+            transform: translateY(-6px);
+            border-color: rgba(255, 107, 0, 0.35);
+            box-shadow: 0 12px 30px var(--accent-glow);
         }
 
-        /* Service Status Header Badge */
+        /* Status Badge - Compact */
         .status-badge {
             position: absolute;
-            top: 1.5rem;
-            right: 1.5rem;
-            padding: 0.35rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
             font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 0.35rem;
+            gap: 0.3rem;
         }
 
         .status-dot {
-            width: 6px;
-            height: 6px;
+            width: 5px;
+            height: 5px;
             border-radius: 50%;
         }
 
         .status-online {
             background-color: var(--status-bg-online);
             color: var(--status-text-online);
-            border: 1px solid rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.05);
         }
 
         .status-online .status-dot {
             background-color: var(--status-text-online);
-            box-shadow: 0 0 8px var(--status-text-online);
+            box-shadow: 0 0 6px var(--status-text-online);
             animation: pulse-dot-green 1.5s infinite;
         }
 
         .status-offline {
             background-color: var(--status-bg-offline);
             color: var(--status-text-offline);
-            border: 1px solid rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.05);
         }
 
         .status-offline .status-dot {
             background-color: var(--status-text-offline);
-            box-shadow: 0 0 8px var(--status-text-offline);
+            box-shadow: 0 0 6px var(--status-text-offline);
             animation: pulse-dot-red 1.5s infinite;
         }
 
-        @keyframes pulse-dot-green {
-            0% { transform: scale(0.9); opacity: 0.6; }
-            50% { transform: scale(1.3); opacity: 1; }
-            100% { transform: scale(0.9); opacity: 0.6; }
-        }
-
-        @keyframes pulse-dot-red {
-            0% { transform: scale(0.9); opacity: 0.6; }
-            50% { transform: scale(1.3); opacity: 1; }
-            100% { transform: scale(0.9); opacity: 0.6; }
-        }
-
-        /* Icon Wrapper & Aesthetics */
+        /* Icon Wrapper - Compact */
         .icon-circle {
-            width: 72px;
-            height: 72px;
-            border-radius: 22px;
+            width: 54px;
+            height: 54px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 2rem;
+            margin-top: 0.5rem;
+            margin-bottom: 1.5rem;
             color: var(--accent);
-            background: linear-gradient(135deg, rgba(255, 107, 0, 0.08) 0%, rgba(255, 107, 0, 0.01) 100%);
-            border: 1px solid rgba(255, 107, 0, 0.15);
+            background: linear-gradient(135deg, rgba(255, 107, 0, 0.06) 0%, rgba(255, 107, 0, 0) 100%);
+            border: 1px solid rgba(255, 107, 0, 0.12);
             transition: transform 0.4s ease;
         }
 
         .card:hover .icon-circle {
-            transform: scale(1.08) rotate(3deg);
-            background: linear-gradient(135deg, rgba(255, 107, 0, 0.15) 0%, rgba(255, 107, 0, 0.05) 100%);
-            border-color: rgba(255, 107, 0, 0.3);
+            transform: scale(1.05) rotate(2deg);
+            background: linear-gradient(135deg, rgba(255, 107, 0, 0.12) 0%, rgba(255, 107, 0, 0.04) 100%);
+            border-color: rgba(255, 107, 0, 0.25);
+        }
+
+        .icon-circle svg {
+            width: 26px;
+            height: 26px;
         }
 
         .card h2 {
-            font-size: 1.4rem;
+            font-size: 1.15rem;
             font-weight: 700;
-            margin-bottom: 0.75rem;
-            letter-spacing: -0.02em;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.01em;
         }
 
         .card p {
             color: var(--text-secondary);
-            font-size: 0.9rem;
-            line-height: 1.6;
-            margin-bottom: 2.5rem;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            margin-bottom: 2rem;
             font-weight: 400;
             flex-grow: 1;
         }
 
-        /* Modern Dashboard Style Buttons */
+        /* Buttons - Compact */
         .launch-btn {
             width: 100%;
-            padding: 1rem;
-            border-radius: 16px;
-            font-size: 0.9rem;
+            padding: 0.75rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
             font-weight: 600;
             text-decoration: none;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 0.5rem;
+            gap: 0.4rem;
             border: none;
             cursor: pointer;
             transition: all 0.2s ease;
         }
 
-        /* Online state button style */
         .btn-active {
             background-color: var(--accent);
             color: #ffffff;
-            box-shadow: 0 4px 14px var(--accent-glow);
+            box-shadow: 0 4px 10px var(--accent-glow);
         }
 
         .btn-active:hover {
             background-color: #e56000;
-            transform: scale(1.02);
-            box-shadow: 0 6px 20px rgba(255, 107, 0, 0.25);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(255, 107, 0, 0.22);
         }
 
-        /* Offline state button style */
         .btn-disabled {
             background-color: var(--btn-disabled-bg);
             color: var(--btn-disabled-text);
@@ -373,12 +371,12 @@
 
         footer {
             margin-top: auto;
-            padding: 3rem 0;
+            padding: 2rem 0;
             color: var(--text-secondary);
-            font-size: 0.8rem;
-            font-weight: 500;
+            font-size: 0.75rem;
+            font-weight: 600;
             letter-spacing: 0.05em;
-            opacity: 0.6;
+            opacity: 0.5;
             z-index: 10;
         }
     </style>
@@ -386,18 +384,15 @@
 <body>
     <div class="glow-lights">
         <div class="glow-light-1"></div>
-        <div class="glow-light-2"></div>
     </div>
 
-    <!-- Theme Switcher Header -->
+    <!-- Theme Switcher -->
     <header>
         <button class="theme-toggle-btn" id="theme-toggle" title="Switch Theme">
-            <!-- Sun Icon (Active when dark theme to switch to light) -->
             <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="4"></circle>
                 <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
             </svg>
-            <!-- Moon Icon (Active when light theme to switch to dark) -->
             <svg id="moon-icon" style="display: none;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
             </svg>
@@ -409,7 +404,7 @@
         <div class="brand-section">
             <span class="logo-tag">ProtectQube Ecosystem</span>
             <h1>ProtectQube Portal</h1>
-            <p class="subtitle">Access local AI engines, voice fraud monitors, and hardware configuration portals of this edge device.</p>
+            <p class="subtitle">Access local AI engines, voice fraud monitors, and hardware configurations of this edge node.</p>
         </div>
 
         <div class="cards-grid" id="cards-container">
@@ -420,8 +415,7 @@
                     <span class="status-text" id="status-text-pq">Checking</span>
                 </div>
                 <div class="icon-circle">
-                    <!-- AI Shield Icon -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                         <path d="M12 8v8"/>
                         <path d="M9.5 10.5h5"/>
@@ -432,7 +426,7 @@
                 <p>NPU-accelerated intelligent camera monitoring and local spatial alert processing engine.</p>
                 <a href="#" class="launch-btn" id="btn-pq">
                     <span>Launch Dashboard</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                         <polyline points="12 5 19 12 12 19"></polyline>
                     </svg>
@@ -446,8 +440,7 @@
                     <span class="status-text" id="status-text-vg">Checking</span>
                 </div>
                 <div class="icon-circle">
-                    <!-- Audio Mic Icon -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
                         <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
                         <line x1="12" y1="19" x2="12" y2="22"/>
@@ -457,7 +450,7 @@
                 <p>Real-time retail audio capture, VAD processing, and local LLM/STT speech analysis system.</p>
                 <a href="#" class="launch-btn" id="btn-vg">
                     <span>Launch Dashboard</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                         <polyline points="12 5 19 12 12 19"></polyline>
                     </svg>
@@ -471,8 +464,7 @@
                     <span class="status-text">Active</span>
                 </div>
                 <div class="icon-circle">
-                    <!-- Settings/Gears Icon -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                     </svg>
@@ -481,7 +473,7 @@
                 <p>System resources visualizer, multimedia input detection, services manager, and network settings.</p>
                 <a href="#" class="launch-btn btn-active" id="btn-dm">
                     <span>Configure Device</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                         <polyline points="12 5 19 12 12 19"></polyline>
                     </svg>
@@ -491,7 +483,7 @@
     </div>
 
     <footer>
-        PROTECTQUBE GATEWAY PORTAL &bull; 2026
+        PROTECTQUBE ECOSYSTEM &bull; 2026
     </footer>
 
     <script>
