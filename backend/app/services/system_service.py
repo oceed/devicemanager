@@ -282,20 +282,51 @@ class SystemService:
         dm_dir = os.path.dirname(backend_dir)
         project_dir = os.path.dirname(dm_dir)
         
-        has_protectqube = False
-        has_voiceguard = False
+        # 1. Directory Checks (Installed)
+        has_protectqube_dir = False
+        has_voiceguard_dir = False
         
         if os.path.exists(docker_mount_path):
-            has_protectqube = os.path.exists(os.path.join(docker_mount_path, "protectqube-ai"))
-            has_voiceguard = os.path.exists(os.path.join(docker_mount_path, "voiceguard"))
+            has_protectqube_dir = os.path.exists(os.path.join(docker_mount_path, "protectqube-ai"))
+            has_voiceguard_dir = os.path.exists(os.path.join(docker_mount_path, "voiceguard"))
         else:
-            has_protectqube = os.path.exists(os.path.join(project_dir, "protectqube-ai"))
-            has_voiceguard = os.path.exists(os.path.join(project_dir, "voiceguard"))
+            has_protectqube_dir = os.path.exists(os.path.join(project_dir, "protectqube-ai"))
+            has_voiceguard_dir = os.path.exists(os.path.join(project_dir, "voiceguard"))
             
+        # 2. Port Checks (Running)
+        import socket
+        def is_port_open(port: int) -> bool:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(0.3)
+                    s.connect(("127.0.0.1", port))
+                    return True
+            except Exception:
+                return False
+                
+        pq_running = is_port_open(8082)
+        vg_running = is_port_open(8083)
+        # Device manager is the service running this request, so it's always running.
+        # But we verify either front 8081 or backend 8011 just in case.
+        dm_running = is_port_open(8081) or is_port_open(8011) or True
+        
+        # 3. Dynamic adjustment: If it's running, it is definitely installed!
+        is_pq_installed = has_protectqube_dir or pq_running
+        is_vg_installed = has_voiceguard_dir or vg_running
+        
         return {
-            "protectqube": has_protectqube,
-            "voiceguard": has_voiceguard,
-            "devicemanager": True
+            "protectqube": {
+                "installed": is_pq_installed,
+                "running": pq_running
+            },
+            "voiceguard": {
+                "installed": is_vg_installed,
+                "running": vg_running
+            },
+            "devicemanager": {
+                "installed": True,
+                "running": dm_running
+            }
         }
 
 
