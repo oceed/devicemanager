@@ -18,8 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Expose port 8000 (though we run in net=host mode, it's good documentation)
-EXPOSE 8000
+# Expose port 8010 (though we run in net=host mode, it's good documentation)
+EXPOSE 8010
 
 # Run uvicorn server
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010"]
