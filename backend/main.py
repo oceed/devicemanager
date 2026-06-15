@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, system, network
+from app.services.watchdog_service import WatchdogService
 
 app = FastAPI(
     title="Orange Pi 5 Pro Device Manager API",
@@ -9,8 +10,6 @@ app = FastAPI(
 )
 
 # Configure CORS
-# In production, when running with network_mode=host or single container setups,
-# the frontend and backend might be accessed on the same IP but different ports.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins for local LAN connectivity
@@ -23,6 +22,15 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(system.router)
 app.include_router(network.router)
+
+@app.on_event("startup")
+async def startup_event():
+    WatchdogService().start()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    WatchdogService().stop()
+
 
 @app.get("/api/health")
 async def health_check():

@@ -6,6 +6,7 @@ import NetworkTab from './components/NetworkTab';
 import WifiTab from './components/WifiTab';
 import ApTab from './components/ApTab';
 import VpnTab from './components/VpnTab';
+import RecoveryTab from './components/RecoveryTab';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -42,6 +43,7 @@ export default function App() {
     { id: 'wifi', label: 'Wi-Fi Client', icon: Wifi },
     { id: 'ap', label: 'Access Point (AP)', icon: Radio },
     { id: 'vpn', label: 'VPN Manager', icon: Shield },
+    { id: 'recovery', label: 'System & Recovery', icon: Settings },
   ];
 
   return (
@@ -117,7 +119,7 @@ export default function App() {
         <header className="px-8 py-5 border-b border-gray-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/10 backdrop-blur-md flex justify-between items-center sticky top-0 z-40">
           <div>
             <h2 className="text-2xl font-bold text-gray-950 dark:text-white capitalize">
-              {activeTab === 'ap' ? 'Access Point (AP)' : activeTab === 'ethernet' ? 'Ethernet Config' : activeTab.replace('-', ' ')}
+              {activeTab === 'ap' ? 'Access Point (AP)' : activeTab === 'ethernet' ? 'Ethernet Config' : activeTab === 'recovery' ? 'System & Recovery' : activeTab.replace('-', ' ')}
             </h2>
             <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">
               Configuration profile interface for Orange Pi 5 Pro Edge Device.
@@ -140,6 +142,7 @@ export default function App() {
           {activeTab === 'wifi' && <WifiTab />}
           {activeTab === 'ap' && <ApTab />}
           {activeTab === 'vpn' && <VpnTab />}
+          {activeTab === 'recovery' && <RecoveryTab />}
         </div>
       </main>
     </div>

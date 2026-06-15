@@ -1,14 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ToggleLeft, ToggleRight, Trash2, Plus, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Shield, ShieldCheck, ToggleLeft, ToggleRight, Trash2, Plus, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function VpnTab() {
   const [vpns, setVpns] = useState([]);
   const [vpnName, setVpnName] = useState('');
   const [configContent, setConfigContent] = useState('');
+  const [vpnType, setVpnType] = useState('wireguard');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
+
+  const [tailscale, setTailscale] = useState({
+    installed: false,
+    active: false,
+    ip: '',
+    node_name: '',
+    status: 'Not Installed'
+  });
+  const [tailscaleSubmitting, setTailscaleSubmitting] = useState(false);
 
   const fetchVpns = async () => {
     try {
@@ -27,9 +37,57 @@ export default function VpnTab() {
     }
   };
 
+  const fetchTailscale = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/network/tailscale', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (data && !data.detail) {
+        setTailscale(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchVpns();
+    fetchTailscale();
+    const interval = setInterval(fetchTailscale, 10000);
+    return () => clearInterval(interval);
   }, []);
+
+  const handleToggleTailscale = async () => {
+    setTailscaleSubmitting(true);
+    setStatusMsg({ type: 'info', text: `${tailscale.active ? 'Disconnecting' : 'Connecting'} Tailscale...` });
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/network/tailscale/toggle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          active: !tailscale.active
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to toggle Tailscale');
+      }
+      setStatusMsg({ type: 'success', text: data.message || 'Tailscale status updated.' });
+      fetchTailscale();
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: err.message });
+    } finally {
+      setTailscaleSubmitting(false);
+    }
+  };
 
   const handleToggleVpn = async (name, currentActive) => {
     setSubmitting(true);
@@ -69,12 +127,12 @@ export default function VpnTab() {
   const handleImportVpn = async (e) => {
     e.preventDefault();
     if (!vpnName || !configContent) {
-      setStatusMsg({ type: 'error', text: 'Please fill in both the profile name and WireGuard config content.' });
+      setStatusMsg({ type: 'error', text: 'Please fill in both the profile name and configuration content.' });
       return;
     }
 
     setImporting(true);
-    setStatusMsg({ type: 'info', text: 'Importing WireGuard profile...' });
+    setStatusMsg({ type: 'info', text: `Importing ${vpnType === 'wireguard' ? 'WireGuard' : 'OpenVPN'} profile...` });
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/network/vpn/import', {
@@ -85,7 +143,8 @@ export default function VpnTab() {
         },
         body: JSON.stringify({
           name: vpnName.replace(/\s+/g, '-'), // remove spaces
-          config_content: configContent
+          config_content: configContent,
+          vpn_type: vpnType
         })
       });
 
@@ -95,7 +154,7 @@ export default function VpnTab() {
         throw new Error(data.detail || 'Failed to import config');
       }
 
-      setStatusMsg({ type: 'success', text: `WireGuard VPN profile '${vpnName}' imported successfully!` });
+      setStatusMsg({ type: 'success', text: `${vpnType === 'wireguard' ? 'WireGuard' : 'OpenVPN'} VPN profile '${vpnName}' imported successfully!` });
       setVpnName('');
       setConfigContent('');
       fetchVpns();
@@ -225,52 +284,127 @@ export default function VpnTab() {
           </div>
         </div>
 
-        {/* Import WireGuard Profile */}
-        <div className="lg:col-span-1 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
-          <h2 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <Plus size={16} className="text-brand-orange" />
-            <span>Import WireGuard VPN</span>
-          </h2>
+        <div className="lg:col-span-1 space-y-6">
+          {/* Import VPN Profile */}
+          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Plus size={16} className="text-brand-orange" />
+              <span>Import VPN Connection</span>
+            </h2>
 
-          <form onSubmit={handleImportVpn} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-zinc-400 mb-1">
-                Profile Connection Name
-              </label>
-              <input
-                type="text"
-                required
-                value={vpnName}
-                onChange={(e) => setVpnName(e.target.value)}
-                placeholder="office-wg"
-                className="w-full px-4 py-2 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-sm font-semibold"
-              />
+            <form onSubmit={handleImportVpn} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 dark:text-zinc-400 mb-1">
+                  VPN Protocol Type
+                </label>
+                <select
+                  value={vpnType}
+                  onChange={(e) => setVpnType(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white dark:bg-zinc-900/50 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-sm font-semibold"
+                >
+                  <option value="wireguard">WireGuard (.conf)</option>
+                  <option value="openvpn">OpenVPN (.ovpn)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 dark:text-zinc-400 mb-1">
+                  Profile Connection ID Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={vpnName}
+                  onChange={(e) => setVpnName(e.target.value)}
+                  placeholder={vpnType === 'wireguard' ? 'office-wg' : 'office-ovpn'}
+                  className="w-full px-4 py-2 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-sm font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  <FileText size={12} />
+                  <span>Configuration Text ({vpnType === 'wireguard' ? 'wg0.conf' : 'client.ovpn'})</span>
+                </label>
+                <textarea
+                  required
+                  rows={6}
+                  value={configContent}
+                  onChange={(e) => setConfigContent(e.target.value)}
+                  placeholder={
+                    vpnType === 'wireguard'
+                      ? "[Interface]\nPrivateKey = ...\nAddress = ...\n\n[Peer]\nPublicKey = ...\nEndpoint = ..."
+                      : "client\ndev tun\nproto udp\nremote 1.2.3.4 1194\nresolv-retry infinite\n..."
+                  }
+                  className="w-full px-4 py-2.5 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-mono"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={importing}
+                className="w-full py-2.5 bg-brand-orange hover:bg-brand-orange-600 text-white font-semibold rounded-xl text-sm transition-all hover:shadow-md hover:shadow-brand-orange/15 flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {importing ? <Loader2 size={14} className="animate-spin" /> : null}
+                <span>Import {vpnType === 'wireguard' ? 'WG' : 'OpenVPN'} Profile</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Tailscale Section */}
+          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Shield size={16} className="text-brand-orange" />
+              <span>Tailscale Mesh VPN</span>
+            </h2>
+            
+            <div className="space-y-4">
+              <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-zinc-800/50">
+                <span className="text-xs font-semibold text-gray-400 dark:text-zinc-500">Status</span>
+                <span className={`text-xs px-2 py-0.5 rounded font-bold uppercase ${
+                  tailscale.status === 'Connected'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400'
+                    : tailscale.status === 'Not Installed'
+                    ? 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400'
+                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
+                }`}>
+                  {tailscale.status}
+                </span>
+              </div>
+
+              {tailscale.installed && tailscale.active && (
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between border-b border-gray-50 dark:border-zinc-800/50 pb-2">
+                    <span className="text-gray-400 dark:text-zinc-500">Node Name:</span>
+                    <span className="font-semibold text-gray-800 dark:text-zinc-200">{tailscale.node_name}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-gray-50 dark:border-zinc-800/50 pb-2">
+                    <span className="text-gray-400 dark:text-zinc-500">Tailscale IP:</span>
+                    <span className="font-semibold font-mono text-gray-800 dark:text-zinc-200">{tailscale.ip}</span>
+                  </div>
+                </div>
+              )}
+
+              {tailscale.installed ? (
+                <button
+                  onClick={handleToggleTailscale}
+                  disabled={tailscaleSubmitting}
+                  className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                    tailscale.active
+                      ? 'border border-red-200 hover:bg-red-50 dark:border-red-950/20 dark:hover:bg-red-950/30 text-red-500'
+                      : 'bg-brand-orange hover:bg-brand-orange-600 text-white hover:shadow-md hover:shadow-brand-orange/15'
+                  }`}
+                >
+                  {tailscaleSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                  <span>{tailscale.active ? 'Disconnect Tailscale' : 'Connect Tailscale'}</span>
+                </button>
+              ) : (
+                <p className="text-[10px] text-gray-400 dark:text-zinc-500 italic leading-snug">
+                  Tailscale is not detected on the device. Install it to manage mesh networks remotely.
+                </p>
+              )}
             </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-zinc-400 mb-1 flex items-center gap-1">
-                <FileText size={12} />
-                <span>Configuration Text (wg0.conf)</span>
-              </label>
-              <textarea
-                required
-                rows={6}
-                value={configContent}
-                onChange={(e) => setConfigContent(e.target.value)}
-                placeholder="[Interface]&#10;PrivateKey = ...&#10;Address = ...&#10;&#10;[Peer]&#10;PublicKey = ...&#10;Endpoint = ..."
-                className="w-full px-4 py-2.5 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-mono"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={importing}
-              className="w-full py-2.5 bg-brand-orange hover:bg-brand-orange-600 text-white font-semibold rounded-xl text-sm transition-all hover:shadow-md hover:shadow-brand-orange/15 flex items-center justify-center gap-1.5 disabled:opacity-50"
-            >
-              {importing ? <Loader2 size={14} className="animate-spin" /> : null}
-              <span>Import WG Profile</span>
-            </button>
-          </form>
+          </div>
         </div>
       </div>
     </div>

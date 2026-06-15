@@ -147,6 +147,45 @@ class SystemService:
             "average": 0.0
         }
 
+    @staticmethod
+    def get_service_status(service_name: str) -> str:
+        if os.name != 'posix':
+            # Mock data for local testing
+            if service_name in ("NetworkManager", "ModemManager", "wpa_supplicant"):
+                return "active"
+            return "inactive"
+        try:
+            result = subprocess.run(["systemctl", "is-active", service_name], capture_output=True, text=True)
+            return result.stdout.strip()
+        except Exception:
+            return "inactive"
+
+    @classmethod
+    def get_services(cls) -> list:
+        services = ["NetworkManager", "ModemManager", "wpa_supplicant", "tailscaled"]
+        statuses = []
+        for s in services:
+            statuses.append({
+                "name": s,
+                "status": cls.get_service_status(s)
+            })
+        return statuses
+
+    @classmethod
+    def restart_service(cls, service_name: str) -> dict:
+        if service_name not in ("NetworkManager", "ModemManager", "wpa_supplicant", "tailscaled"):
+            return {"success": False, "message": f"Service '{service_name}' is not in the whitelist."}
+        if os.name != 'posix':
+            return {"success": True, "message": f"Mock: Successfully restarted service '{service_name}'."}
+        try:
+            result = subprocess.run(["sudo", "systemctl", "restart", service_name], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                return {"success": True, "message": f"Successfully restarted service '{service_name}'."}
+            else:
+                return {"success": False, "message": f"Failed to restart service: {result.stderr.strip()}"}
+        except Exception as e:
+            return {"success": False, "message": f"Failed to restart service: {str(e)}"}
+
     @classmethod
     def get_all_metrics(cls) -> dict:
         return {
@@ -158,3 +197,4 @@ class SystemService:
             "temperatures": cls.get_temperatures(),
             "npu": cls.get_npu_load()
         }
+

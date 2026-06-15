@@ -2,6 +2,8 @@ import subprocess
 import shutil
 import tempfile
 import os
+import re
+import json
 
 class NetworkService:
     @staticmethod
@@ -365,31 +367,26 @@ class NetworkService:
             return []
 
     @classmethod
-    def add_wireguard_vpn(cls, name: str, config_content: str) -> dict:
+    def add_vpn(cls, name: str, config_content: str, vpn_type: str = "wireguard") -> dict:
         if not cls.is_nmcli_available():
-            return {"success": True, "message": f"Mock: WireGuard VPN '{name}' imported successfully."}
+            return {"success": True, "message": f"Mock: {vpn_type} VPN '{name}' imported successfully."}
             
-        # Write config to a temporary file, then import
         temp_file = None
+        suffix = ".conf" if vpn_type == "wireguard" else ".ovpn"
         try:
-            with tempfile.NamedTemporaryFile(suffix=".conf", mode="w", delete=False) as f:
+            with tempfile.NamedTemporaryFile(suffix=suffix, mode="w", delete=False) as f:
                 f.write(config_content)
                 temp_file = f.name
                 
-            # nmcli connection import type wireguard file /path/to/conf
-            # Need to see if we need to rename it or if it imports using the file name
-            # Let's import it
-            cmd = ["nmcli", "connection", "import", "type", "wireguard", "file", temp_file]
+            cmd = ["nmcli", "connection", "import", "type", vpn_type, "file", temp_file]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             
-            # The connection profile name will match the config filename (excluding .conf)
-            # We can rename it to the requested 'name' if necessary
-            imported_name = os.path.basename(temp_file).replace(".conf", "")
+            imported_name = os.path.basename(temp_file).replace(suffix, "")
             
             if result.returncode == 0:
                 if name and name != imported_name:
                     subprocess.run(["nmcli", "connection", "modify", imported_name, "connection.id", name])
-                return {"success": True, "message": f"WireGuard profile '{name or imported_name}' imported successfully"}
+                return {"success": True, "message": f"{vpn_type} profile '{name or imported_name}' imported successfully"}
             else:
                 return {"success": False, "message": f"Failed to import: {result.stderr.strip()}"}
         except Exception as e:
@@ -397,6 +394,10 @@ class NetworkService:
         finally:
             if temp_file and os.path.exists(temp_file):
                 os.remove(temp_file)
+
+    @classmethod
+    def add_wireguard_vpn(cls, name: str, config_content: str) -> dict:
+        return cls.add_vpn(name, config_content, "wireguard")
 
     @classmethod
     def toggle_vpn(cls, name: str, active: bool) -> dict:
@@ -426,3 +427,244 @@ class NetworkService:
                 return {"success": False, "message": result.stderr.strip()}
         except Exception as e:
             return {"success": False, "message": str(e)}
+
+    @staticmethod
+    def is_tailscale_available() -> bool:
+        return shutil.which("tailscale") is not None
+
+    @classmethod
+    def get_tailscale_status(cls) -> dict:
+        if not cls.is_tailscale_available():
+            return {
+                "installed": False,
+                "active": False,
+                "ip": "",
+                "node_name": "",
+                "status": "Not Installed"
+            }
+        try:
+            result = subprocess.run(["tailscale", "status"], capture_output=True, text=True, timeout=5)
+            if result.returncode != 0:
+                is_active = False
+                try:
+                    active_check = subprocess.run(["systemctl", "is-active", "tailscaled"], capture_output=True, text=True)
+                    is_active = active_check.stdout.strip() == "active"
+                except Exception:
+                    pass
+                return {
+                    "installed": True,
+                    "active": is_active,
+                    "ip": "",
+                    "node_name": "",
+                    "status": "Disconnected or Stopped"
+                }
+            
+            lines = result.stdout.strip().split("\n")
+            if not lines or not lines[0].strip():
+                return {
+                    "installed": True,
+                    "active": True,
+                    "ip": "",
+                    "node_name": "",
+                    "status": "Active (No connections)"
+                }
+            
+            self_line = None
+            for line in lines:
+                if "self" in line:
+                    self_line = line
+                    break
+            
+            if not self_line and lines:
+                self_line = lines[0]
+                
+            parts = self_line.split()
+            if len(parts) >= 2:
+                ip = parts[0]
+                node_name = parts[1]
+                return {
+                    "installed": True,
+                    "active": True,
+                    "ip": ip,
+                    "node_name": node_name,
+                    "status": "Connected"
+                }
+            
+            return {
+                "installed": True,
+                "active": True,
+                "ip": "",
+                "node_name": "",
+                "status": "Active"
+            }
+        except Exception as e:
+            return {
+                "installed": True,
+                "active": False,
+                "ip": "",
+                "node_name": "",
+                "status": f"Error: {str(e)}"
+            }
+
+    @classmethod
+    def toggle_tailscale(cls, active: bool) -> dict:
+        if not cls.is_tailscale_available():
+            return {"success": False, "message": "Tailscale is not installed on this system."}
+        try:
+            cmd = ["sudo", "tailscale", "up" if active else "down"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if result.returncode == 0:
+                return {"success": True, "message": f"Tailscale successfully turned {'on' if active else 'off'}."}
+            else:
+                return {"success": False, "message": f"Tailscale error: {result.stderr.strip()}"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    @staticmethod
+    def is_mmcli_available() -> bool:
+        return shutil.which("mmcli") is not None
+
+    @classmethod
+    def list_modems(cls) -> list:
+        if not cls.is_mmcli_available():
+            return [
+                {"id": "0", "manufacturer": "Quectel", "model": "EC25-E", "path": "/org/freedesktop/ModemManager1/Modem/0"}
+            ]
+        try:
+            output = subprocess.check_output(["mmcli", "-L"], text=True).strip()
+            modems = []
+            pattern = re.compile(r"(/org/freedesktop/ModemManager1/Modem/(\d+))\s+\[([^\]]+)\]\s+(.*)")
+            for line in output.split("\n"):
+                match = pattern.search(line)
+                if match:
+                    path, idx, manufacturer, model = match.groups()
+                    modems.append({
+                        "id": idx,
+                        "manufacturer": manufacturer.strip(),
+                        "model": model.strip(),
+                        "path": path
+                    })
+            return modems
+        except Exception:
+            return []
+
+    @classmethod
+    def get_modem_info(cls, modem_id: str = "0") -> dict:
+        if not cls.is_mmcli_available():
+            return {
+                "id": modem_id,
+                "manufacturer": "Quectel",
+                "model": "EC25-E",
+                "state": "connected",
+                "power_state": "on",
+                "signal_quality": "84",
+                "access_tech": "lte",
+                "operator_name": "Telkomsel",
+                "operator_code": "51010",
+                "ip": "10.64.23.105",
+                "imei": "862309047281923",
+                "iccid": "8962019283719283712",
+                "success": True
+            }
+        
+        try:
+            result = subprocess.run(["mmcli", "-m", modem_id, "-j"], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                modem = data.get("modem", {})
+                generic = modem.get("generic", {})
+                tgpp = modem.get("3gpp", {})
+                
+                ip_addr = ""
+                try:
+                    bearers = generic.get("bearers", [])
+                    if bearers:
+                        bearer_path = bearers[0]
+                        bearer_id = bearer_path.split("/")[-1]
+                        b_res = subprocess.run(["mmcli", "-b", bearer_id, "-j"], capture_output=True, text=True, timeout=5)
+                        if b_res.returncode == 0:
+                            b_data = json.loads(b_res.stdout)
+                            ip_addr = b_data.get("bearer", {}).get("ipv4-config", {}).get("address", "")
+                except Exception:
+                    pass
+
+                return {
+                    "id": modem_id,
+                    "manufacturer": generic.get("manufacturer", "Unknown"),
+                    "model": generic.get("model", "Unknown"),
+                    "state": generic.get("state", "unknown"),
+                    "power_state": generic.get("power-state", "unknown"),
+                    "signal_quality": str(generic.get("signal-quality", {}).get("value", "0")),
+                    "access_tech": ", ".join(generic.get("access-technologies", [])),
+                    "operator_name": tgpp.get("operator-name", "Unknown"),
+                    "operator_code": tgpp.get("operator-code", "Unknown"),
+                    "ip": ip_addr,
+                    "imei": tgpp.get("imei", ""),
+                    "iccid": modem.get("sim", {}).get("iccid", "Unknown"),
+                    "success": True
+                }
+        except Exception:
+            pass
+
+        try:
+            output = subprocess.check_output(["mmcli", "-m", modem_id], text=True).strip()
+            info = {"id": modem_id, "success": True}
+            
+            for line in output.split("\n"):
+                if ":" not in line:
+                    continue
+                key, val = line.split(":", 1)
+                key = key.strip().lower()
+                val = val.strip()
+                
+                if "manufacturer" in key:
+                    info["manufacturer"] = val
+                elif "model" in key:
+                    info["model"] = val
+                elif "state" in key and "power" not in key:
+                    info["state"] = val
+                elif "power state" in key:
+                    info["power_state"] = val
+                elif "signal quality" in key:
+                    m = re.search(r"(\d+)", val)
+                    info["signal_quality"] = m.group(1) if m else "0"
+                elif "access tech" in key or "access technologies" in key:
+                    info["access_tech"] = val
+                elif "operator name" in key:
+                    info["operator_name"] = val
+                elif "operator code" in key:
+                    info["operator_code"] = val
+                elif "imei" in key:
+                    info["imei"] = val
+                elif "iccid" in key:
+                    info["iccid"] = val
+            
+            return info
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    @classmethod
+    def toggle_interface_or_radio(cls, active: bool, device: str = None, connection: str = None, radio: str = None) -> dict:
+        if not cls.is_nmcli_available():
+            return {"success": True, "message": f"Mock: Toggled interface/connection/radio active={active}"}
+        try:
+            if radio == "wifi":
+                action = "on" if active else "off"
+                result = subprocess.run(["nmcli", "radio", "wifi", action], capture_output=True, text=True, timeout=10)
+            elif connection:
+                action = "up" if active else "down"
+                result = subprocess.run(["nmcli", "connection", action, connection], capture_output=True, text=True, timeout=15)
+            elif device:
+                action = "connect" if active else "disconnect"
+                result = subprocess.run(["nmcli", "device", action, device], capture_output=True, text=True, timeout=15)
+            else:
+                return {"success": False, "message": "Specify device, connection, or radio to toggle."}
+            
+            if result.returncode == 0:
+                return {"success": True, "message": "Successfully toggled connectivity status."}
+            else:
+                return {"success": False, "message": result.stderr.strip()}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+
