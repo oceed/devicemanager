@@ -8,6 +8,6 @@ class Settings:
     # Default admin credentials
     ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin")
     # Default bcrypt hash for "admin123"
-    ADMIN_PASSWORD_HASH: str = os.getenv("ADMIN_PASSWORD_HASH", "$2b$12$R.SnbFw5p/s9C4w657N1fuvWb1wB5c6e8t6lZpQvSgY3X/5G8RpeC")
+    ADMIN_PASSWORD_HASH: str = os.getenv("ADMIN_PASSWORD_HASH", "$2b$12$8Yq9prElz7KsWNVJCMNrguSZqV97huYLcIueffa6yW/zfdBQj7OFG")
 
 settings = Settings()
