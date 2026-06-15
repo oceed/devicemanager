@@ -273,6 +273,32 @@ class SystemService:
             "microphones": microphones
         }
 
+    @staticmethod
+    def check_projects_installed() -> dict:
+        docker_mount_path = "/project_siblings"
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        app_dir = os.path.dirname(current_dir)
+        backend_dir = os.path.dirname(app_dir)
+        dm_dir = os.path.dirname(backend_dir)
+        project_dir = os.path.dirname(dm_dir)
+        
+        has_protectqube = False
+        has_voiceguard = False
+        
+        if os.path.exists(docker_mount_path):
+            has_protectqube = os.path.exists(os.path.join(docker_mount_path, "protectqube-ai"))
+            has_voiceguard = os.path.exists(os.path.join(docker_mount_path, "voiceguard"))
+        else:
+            has_protectqube = os.path.exists(os.path.join(project_dir, "protectqube-ai"))
+            has_voiceguard = os.path.exists(os.path.join(project_dir, "voiceguard"))
+            
+        return {
+            "protectqube": has_protectqube,
+            "voiceguard": has_voiceguard,
+            "devicemanager": True
+        }
+
+
 
     @classmethod
     def get_all_metrics(cls) -> dict:

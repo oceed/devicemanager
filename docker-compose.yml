@@ -16,6 +16,8 @@ services:
       - /sys:/sys
       # Optional: map NetworkManager configs if needed to read profile files
       - /etc/NetworkManager:/etc/NetworkManager
+      # Map parent directory to detect if sister projects exist on host
+      - ../:/project_siblings:ro
     environment:
       - SECRET_KEY=supersecretkey_protectqube_voiceguard_orange_pi
       - ADMIN_USERNAME=admin

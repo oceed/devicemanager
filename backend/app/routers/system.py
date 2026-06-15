@@ -81,3 +81,8 @@ async def get_modem_info(modem_id: Optional[str] = "0", current_user: str = Depe
         "active_modem": active_modem
     }
 
+@router.get("/portal/status")
+async def get_portal_status():
+    return SystemService.check_projects_installed()
+
+
