@@ -71,10 +71,10 @@ class NetworkService:
     def scan_wifi(cls) -> list:
         if not cls.is_nmcli_available():
             return [
-                {"ssid": "Corporate-Main-Wi-Fi", "bssid": "00:11:22:33:44:55", "signal": 95, "security": "WPA2 WPA3"},
-                {"ssid": "Office-Guest", "bssid": "00:11:22:33:44:66", "signal": 78, "security": "WPA2"},
-                {"ssid": "ProtectQube-AP-99F1", "bssid": "00:11:22:33:44:77", "signal": 60, "security": "WPA2"},
-                {"ssid": "Cafe-Free-WiFi", "bssid": "aa:bb:cc:dd:ee:ff", "signal": 45, "security": "None"}
+                {"ssid": "Corporate-Main-Wi-Fi", "bssid": "00:11:22:33:44:55", "signal": 95, "security": "WPA2 WPA3", "connected": True},
+                {"ssid": "Office-Guest", "bssid": "00:11:22:33:44:66", "signal": 78, "security": "WPA2", "connected": False},
+                {"ssid": "ProtectQube-AP-99F1", "bssid": "00:11:22:33:44:77", "signal": 60, "security": "WPA2", "connected": False},
+                {"ssid": "Cafe-Free-WiFi", "bssid": "aa:bb:cc:dd:ee:ff", "signal": 45, "security": "None", "connected": False}
             ]
             
         try:
@@ -82,7 +82,7 @@ class NetworkService:
             subprocess.run(["nmcli", "device", "wifi", "rescan"], capture_output=True, timeout=5)
             
             output = subprocess.check_output(
-                ["nmcli", "-t", "-f", "SSID,BSSID,SIGNAL,SECURITY", "device", "wifi", "list"],
+                ["nmcli", "-t", "-f", "ACTIVE,SSID,BSSID,SIGNAL,SECURITY", "device", "wifi", "list"],
                 text=True
             ).strip()
             
@@ -90,27 +90,27 @@ class NetworkService:
             for line in output.split("\n"):
                 if not line.strip():
                     continue
-                # SSID might contain colons, nmcli -t uses backslash escapes for colons
-                # E.g. SSID\:Name:BSSID:SIGNAL:SECURITY
-                # A safer split is done backwards or using regex
                 parts = line.split(":")
-                if len(parts) >= 4:
+                if len(parts) >= 5:
+                    active = parts[0].strip().lower()
+                    is_connected = active in ("yes", "*")
                     security = parts[-1]
                     signal = int(parts[-2])
                     bssid = ":".join(parts[-8:-2]) # BSSID is 6 hex bytes
-                    ssid = ":".join(parts[0:-8]) # Rest is SSID
+                    ssid = ":".join(parts[1:-8]) # Rest is SSID
                     
                     ssid = ssid.replace("\\:", ":").strip()
                     if not ssid:
                         continue # Skip hidden network
                         
-                    # Group by SSID, keep highest signal
-                    if ssid not in networks or networks[ssid]["signal"] < signal:
+                    # Group by SSID, keep highest signal (or if connected, prioritize connected)
+                    if ssid not in networks or networks[ssid]["signal"] < signal or is_connected:
                         networks[ssid] = {
                             "ssid": ssid,
                             "bssid": bssid.replace("\\:", ":"),
                             "signal": signal,
-                            "security": security.replace("\\:", ":") if security else "None"
+                            "security": security.replace("\\:", ":") if security else "None",
+                            "connected": is_connected
                         }
             return list(networks.values())
         except Exception as e:
@@ -666,5 +666,28 @@ class NetworkService:
                 return {"success": False, "message": result.stderr.strip()}
         except Exception as e:
             return {"success": False, "message": str(e)}
+
+    @classmethod
+    def disconnect_wifi(cls) -> dict:
+        if not cls.is_nmcli_available():
+            return {"success": True, "message": "Mock: Wi-Fi disconnected successfully."}
+        try:
+            interfaces = cls.get_interfaces()
+            wlan_dev = None
+            for info in interfaces:
+                if info.get("type") == "wifi":
+                    wlan_dev = info.get("device")
+                    break
+            if not wlan_dev:
+                wlan_dev = "wlan0"
+            
+            result = subprocess.run(["nmcli", "device", "disconnect", wlan_dev], capture_output=True, text=True, timeout=15)
+            if result.returncode == 0:
+                return {"success": True, "message": "Wi-Fi interface disconnected successfully."}
+            else:
+                return {"success": False, "message": result.stderr.strip()}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
 
 

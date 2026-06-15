@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Wifi, WifiOff, RefreshCw, Key, Shield, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, Key, Shield, ShieldCheck, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function WifiTab() {
   const [networks, setNetworks] = useState([]);
@@ -64,6 +64,31 @@ export default function WifiTab() {
       setPassword('');
     } catch (err) {
       setStatusMsg({ type: 'error', text: err.message || `Failed to connect to ${selectedNetwork.ssid}` });
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setConnecting(true);
+    setStatusMsg({ type: 'info', text: 'Disconnecting from Wi-Fi...' });
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/network/wifi/disconnect', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Disconnection failed');
+      }
+      setStatusMsg({ type: 'success', text: 'Wi-Fi interface disconnected successfully.' });
+      setSelectedNetwork(null);
+      scanWifi();
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: err.message || 'Failed to disconnect Wi-Fi' });
     } finally {
       setConnecting(false);
     }
@@ -142,7 +167,9 @@ export default function WifiTab() {
                     <span className="text-xs font-semibold font-mono text-gray-500 dark:text-zinc-400">
                       {net.signal}%
                     </span>
-                    {hasSecurity ? (
+                    {net.connected ? (
+                      <span className="text-[10px] text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">Connected</span>
+                    ) : hasSecurity ? (
                       <Shield size={14} className="text-gray-400 dark:text-zinc-500" title={net.security} />
                     ) : (
                       <span className="text-[10px] text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-1.5 py-0.5 rounded font-bold uppercase">Open</span>
@@ -165,52 +192,85 @@ export default function WifiTab() {
         {/* Connect Pane */}
         <div className="lg:col-span-1">
           {selectedNetwork ? (
-            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm animate-in fade-in zoom-in-95 duration-200">
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Connect to Network</h3>
-              <div className="p-3 bg-gray-50 dark:bg-zinc-950 rounded-xl mb-4 text-sm font-semibold text-gray-700 dark:text-zinc-300">
-                SSID: {selectedNetwork.ssid}
-              </div>
-              
-              <form onSubmit={handleConnect} className="space-y-4">
-                {selectedNetwork.security !== 'None' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1">
-                      <Key size={14} className="text-brand-orange" />
-                      <span>Security Password</span>
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-4 py-2.5 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-sm"
-                    />
-                  </div>
-                )}
+            selectedNetwork.connected ? (
+              <div className="bg-white dark:bg-zinc-900 border border-emerald-100 dark:border-emerald-950/20 rounded-2xl p-6 shadow-sm animate-in fade-in zoom-in-95 duration-200">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                  <ShieldCheck className="text-emerald-500" size={18} />
+                  <span>Connected Network</span>
+                </h3>
+                <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/10 rounded-xl mb-4 space-y-2 text-sm text-gray-700 dark:text-zinc-300 border border-emerald-100/30">
+                  <div><span className="text-gray-400">SSID:</span> <span className="font-bold">{selectedNetwork.ssid}</span></div>
+                  <div><span className="text-gray-400">BSSID:</span> <span className="font-mono text-xs">{selectedNetwork.bssid}</span></div>
+                  <div><span className="text-gray-400">Signal:</span> <span>{selectedNetwork.signal}%</span></div>
+                  <div><span className="text-gray-400">Security:</span> <span>{selectedNetwork.security}</span></div>
+                </div>
                 
-                <div className="flex gap-2 pt-2">
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedNetwork(null);
-                      setPassword('');
-                    }}
+                    onClick={() => setSelectedNetwork(null)}
                     className="flex-1 py-2.5 border border-gray-300 dark:border-zinc-800 text-gray-700 dark:text-zinc-300 text-sm font-semibold rounded-xl transition-all"
                   >
-                    Cancel
+                    Close
                   </button>
                   <button
-                    type="submit"
+                    onClick={handleDisconnect}
                     disabled={connecting}
-                    className="flex-1 py-2.5 bg-brand-orange hover:bg-brand-orange-600 text-white text-sm font-semibold rounded-xl transition-all hover:shadow-md hover:shadow-brand-orange/15 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-xl transition-all hover:shadow-md hover:shadow-red-500/15 flex items-center justify-center gap-1.5 disabled:opacity-50 animate-in fade-in duration-200"
                   >
-                    {connecting ? <RefreshCw size={14} className="animate-spin" /> : null}
-                    <span>Connect</span>
+                    {connecting ? <Loader2 size={14} className="animate-spin" /> : null}
+                    <span>Disconnect</span>
                   </button>
                 </div>
-              </form>
-            </div>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm animate-in fade-in zoom-in-95 duration-200">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Connect to Network</h3>
+                <div className="p-3 bg-gray-50 dark:bg-zinc-950 rounded-xl mb-4 text-sm font-semibold text-gray-700 dark:text-zinc-300">
+                  SSID: {selectedNetwork.ssid}
+                </div>
+                
+                <form onSubmit={handleConnect} className="space-y-4">
+                  {selectedNetwork.security !== 'None' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1">
+                        <Key size={14} className="text-brand-orange" />
+                        <span>Security Password</span>
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-4 py-2.5 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-sm"
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedNetwork(null);
+                        setPassword('');
+                      }}
+                      className="flex-1 py-2.5 border border-gray-300 dark:border-zinc-800 text-gray-700 dark:text-zinc-300 text-sm font-semibold rounded-xl transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={connecting}
+                      className="flex-1 py-2.5 bg-brand-orange hover:bg-brand-orange-600 text-white text-sm font-semibold rounded-xl transition-all hover:shadow-md hover:shadow-brand-orange/15 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {connecting ? <Loader2 size={14} className="animate-spin" /> : null}
+                      <span>Connect</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )
           ) : (
             <div className="h-full bg-white dark:bg-zinc-900 border border-dashed border-gray-200 dark:border-zinc-800 rounded-2xl p-6 text-center flex flex-col items-center justify-center min-h-[220px]">
               <Wifi size={32} className="text-gray-300 dark:text-zinc-700 mb-3" />

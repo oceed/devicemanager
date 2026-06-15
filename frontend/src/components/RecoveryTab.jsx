@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, RefreshCw, Radio, HardDrive, ToggleLeft, ToggleRight, CheckCircle2, AlertTriangle, Play, HelpCircle, Loader2, Signal, AlertCircle, Trash2 } from 'lucide-react';
+import { Cpu, RefreshCw, Radio, HardDrive, ToggleLeft, ToggleRight, CheckCircle2, AlertTriangle, Play, HelpCircle, Loader2, Signal, AlertCircle, Trash2, Square, Video, Mic } from 'lucide-react';
 
 export default function RecoveryTab() {
   const [usbDevices, setUsbDevices] = useState([]);
   const [services, setServices] = useState([]);
   const [modems, setModems] = useState([]);
   const [activeModem, setActiveModem] = useState(null);
+  const [multimedia, setMultimedia] = useState({ cameras: [], microphones: [] });
   const [watchdog, setWatchdog] = useState({
     enabled: false,
     ping_target: '8.8.8.8',
@@ -21,7 +22,7 @@ export default function RecoveryTab() {
 
   const [loading, setLoading] = useState(true);
   const [resettingUsb, setResettingUsb] = useState(null);
-  const [restartingService, setRestartingService] = useState(null);
+  const [serviceActionLoading, setServiceActionLoading] = useState(null);
   const [modemLoading, setModemLoading] = useState(false);
   const [watchdogSubmitting, setWatchdogSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
@@ -41,14 +42,21 @@ export default function RecoveryTab() {
       const svcData = await svcRes.json();
       setServices(Array.isArray(svcData) ? svcData : []);
 
-      // 3. Fetch Watchdog status
+      // 3. Fetch Multimedia devices
+      const mmRes = await fetch('/api/system/multimedia', { headers });
+      const mmData = await mmRes.json();
+      if (mmData && !mmData.detail) {
+        setMultimedia(mmData);
+      }
+
+      // 4. Fetch Watchdog status
       const wdRes = await fetch('/api/network/watchdog/status', { headers });
       const wdData = await wdRes.json();
       if (wdData && !wdData.detail) {
         setWatchdog(wdData);
       }
 
-      // 4. Fetch Modem info
+      // 5. Fetch Modem info
       setModemLoading(true);
       const modemRes = await fetch('/api/system/modem', { headers });
       const modemData = await modemRes.json();
@@ -102,25 +110,25 @@ export default function RecoveryTab() {
     }
   };
 
-  const handleRestartService = async (serviceName) => {
-    setRestartingService(serviceName);
+  const handleControlService = async (serviceName, action) => {
+    setServiceActionLoading(`${serviceName}-${action}`);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/system/services/restart', {
+      const response = await fetch('/api/system/services/control', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ service_name: serviceName })
+        body: JSON.stringify({ service_name: serviceName, action })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'Failed to restart service');
-      showStatus('success', data.message || `Service ${serviceName} restarted successfully.`);
+      if (!response.ok) throw new Error(data.detail || 'Failed to control service');
+      showStatus('success', data.message || `Service ${serviceName} ${action}ed successfully.`);
     } catch (err) {
       showStatus('error', err.message);
     } finally {
-      setRestartingService(null);
+      setServiceActionLoading(null);
       fetchData();
     }
   };
@@ -258,7 +266,7 @@ export default function RecoveryTab() {
             <div className="space-y-3">
               {services.map((svc) => {
                 const isActive = svc.status === 'active';
-                const isRestarting = restartingService === svc.name;
+                const isInstalled = svc.status !== 'not-installed';
                 
                 return (
                   <div
@@ -266,23 +274,71 @@ export default function RecoveryTab() {
                     className="flex items-center justify-between p-3.5 bg-gray-50/50 dark:bg-zinc-950/50 border border-gray-100 dark:border-zinc-800 rounded-xl"
                   >
                     <div>
-                      <h4 className="font-bold text-gray-800 dark:text-zinc-200 text-sm">{svc.name}</h4>
+                      <h4 className="font-bold text-gray-800 dark:text-zinc-200 text-sm truncate max-w-[150px]" title={svc.name}>{svc.name}</h4>
                       <div className="flex items-center gap-1.5 mt-1">
-                        <span className={`w-2.5 h-2.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-                        <span className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">
-                          {svc.status}
+                        <span className={`w-2.5 h-2.5 rounded-full ${
+                          isActive 
+                            ? 'bg-emerald-500 animate-pulse' 
+                            : svc.status === 'not-installed'
+                            ? 'bg-zinc-300 dark:bg-zinc-700' 
+                            : 'bg-red-500'
+                        }`} />
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          isActive 
+                            ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400' 
+                            : svc.status === 'not-installed'
+                            ? 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+                            : 'bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400'
+                        } uppercase tracking-wide`}>
+                          {svc.status.replace('-', ' ')}
                         </span>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleRestartService(svc.name)}
-                      disabled={isRestarting}
-                      className="p-2 border border-gray-200 dark:border-zinc-800 hover:border-brand-orange text-gray-500 dark:text-zinc-400 hover:text-brand-orange hover:bg-brand-orange/5 rounded-lg transition-all"
-                      title={`Restart ${svc.name}`}
-                    >
-                      <RefreshCw size={14} className={isRestarting ? 'animate-spin' : ''} />
-                    </button>
+                    {isInstalled && (
+                      <div className="flex gap-1.5">
+                        {isActive ? (
+                          <button
+                            onClick={() => handleControlService(svc.name, 'stop')}
+                            disabled={serviceActionLoading !== null}
+                            className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-red-500 text-gray-400 dark:text-zinc-500 hover:text-red-500 rounded-lg transition-all hover:bg-red-50/50 dark:hover:bg-red-950/10"
+                            title={`Stop ${svc.name}`}
+                          >
+                            {serviceActionLoading === `${svc.name}-stop` ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <Square size={13} />
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleControlService(svc.name, 'start')}
+                            disabled={serviceActionLoading !== null}
+                            className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-emerald-500 text-gray-400 dark:text-zinc-500 hover:text-emerald-500 rounded-lg transition-all hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10"
+                            title={`Start ${svc.name}`}
+                          >
+                            {serviceActionLoading === `${svc.name}-start` ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <Play size={13} />
+                            )}
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleControlService(svc.name, 'restart')}
+                          disabled={serviceActionLoading !== null}
+                          className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-brand-orange text-gray-400 dark:text-zinc-500 hover:text-brand-orange rounded-lg transition-all hover:bg-brand-orange/5"
+                          title={`Restart ${svc.name}`}
+                        >
+                          {serviceActionLoading === `${svc.name}-restart` ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <RefreshCw size={13} />
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -370,15 +426,16 @@ export default function RecoveryTab() {
           </div>
         </div>
 
-        {/* MIDDLE COLUMN: USB Devices & Reset Controls */}
-        <div className="lg:col-span-1 space-y-6">
+        {/* MIDDLE COLUMN: USB Devices & Multimedia Inputs */}
+        <div className="lg:col-span-1 space-y-6 flex flex-col">
+          {/* USB Devices Card */}
           <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm flex-1 flex flex-col">
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <HardDrive size={18} className="text-brand-orange" />
               <span>Connected USB Devices</span>
             </h2>
 
-            <div className="space-y-3 flex-1 overflow-y-auto max-h-[550px] pr-1">
+            <div className="space-y-3 flex-1 overflow-y-auto max-h-[350px] pr-1">
               {usbDevices.map((usb, index) => {
                 const isResetting = resettingUsb === usb.path;
                 return (
@@ -420,6 +477,64 @@ export default function RecoveryTab() {
                   No USB controllers or devices listed.
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Multimedia inputs Card */}
+          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm flex-1 flex flex-col">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Video size={18} className="text-brand-orange" />
+              <span>Multimedia Inputs</span>
+            </h2>
+
+            <div className="space-y-4 flex-1 overflow-y-auto max-h-[300px] pr-1">
+              {/* Cameras */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Video size={12} />
+                  <span>Video Cameras</span>
+                </h3>
+                {multimedia.cameras.map((cam, idx) => (
+                  <div key={idx} className="p-3 bg-gray-50/50 dark:bg-zinc-950/50 border border-gray-100 dark:border-zinc-850 rounded-xl flex items-center gap-3">
+                    <div className="p-2 bg-brand-orange/10 text-brand-orange rounded-lg">
+                      <Video size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-gray-800 dark:text-zinc-200 text-xs truncate max-w-[170px]" title={cam.name}>
+                        {cam.name}
+                      </h4>
+                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">{cam.device}</p>
+                    </div>
+                  </div>
+                ))}
+                {multimedia.cameras.length === 0 && (
+                  <p className="text-[10px] text-zinc-500 italic pl-2">No video inputs detected.</p>
+                )}
+              </div>
+
+              {/* Microphones */}
+              <div className="space-y-2 border-t border-gray-100 dark:border-zinc-800/50 pt-3">
+                <h3 className="text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Mic size={12} />
+                  <span>Audio Capture Inputs</span>
+                </h3>
+                {multimedia.microphones.map((mic, idx) => (
+                  <div key={idx} className="p-3 bg-gray-50/50 dark:bg-zinc-950/50 border border-gray-100 dark:border-zinc-850 rounded-xl flex items-center gap-3">
+                    <div className="p-2 bg-brand-orange/10 text-brand-orange rounded-lg">
+                      <Mic size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-gray-800 dark:text-zinc-200 text-xs truncate max-w-[170px]" title={mic.name}>
+                        {mic.name}
+                      </h4>
+                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">Card ID: {mic.id}</p>
+                    </div>
+                  </div>
+                ))}
+                {multimedia.microphones.length === 0 && (
+                  <p className="text-[10px] text-zinc-500 italic pl-2">No audio capture inputs detected.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

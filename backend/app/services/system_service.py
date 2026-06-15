@@ -2,6 +2,7 @@ import os
 import re
 import psutil
 import time
+import subprocess
 
 class SystemService:
     @staticmethod
@@ -151,18 +152,38 @@ class SystemService:
     def get_service_status(service_name: str) -> str:
         if os.name != 'posix':
             # Mock data for local testing
-            if service_name in ("NetworkManager", "ModemManager", "wpa_supplicant"):
+            if service_name in ("NetworkManager", "ModemManager", "wpa_supplicant", "voiceguard", "protectqube", "device-manager-backend"):
                 return "active"
             return "inactive"
         try:
-            result = subprocess.run(["systemctl", "is-active", service_name], capture_output=True, text=True)
-            return result.stdout.strip()
+            result = subprocess.run(["systemctl", "show", "-p", "LoadState", "-p", "ActiveState", service_name], capture_output=True, text=True, timeout=5)
+            lines = result.stdout.strip().split("\n")
+            load_state = "unknown"
+            active_state = "inactive"
+            for line in lines:
+                if line.startswith("LoadState="):
+                    load_state = line.split("=")[1]
+                elif line.startswith("ActiveState="):
+                    active_state = line.split("=")[1]
+            
+            if load_state == "not-found":
+                return "not-installed"
+            return active_state
         except Exception:
             return "inactive"
 
     @classmethod
     def get_services(cls) -> list:
-        services = ["NetworkManager", "ModemManager", "wpa_supplicant", "tailscaled"]
+        services = [
+            "NetworkManager", 
+            "ModemManager", 
+            "wpa_supplicant", 
+            "tailscaled", 
+            "voiceguard", 
+            "protectqube", 
+            "device-manager-backend", 
+            "device-manager-frontend"
+        ]
         statuses = []
         for s in services:
             statuses.append({
@@ -172,19 +193,86 @@ class SystemService:
         return statuses
 
     @classmethod
-    def restart_service(cls, service_name: str) -> dict:
-        if service_name not in ("NetworkManager", "ModemManager", "wpa_supplicant", "tailscaled"):
+    def control_service(cls, service_name: str, action: str) -> dict:
+        allowed_services = (
+            "NetworkManager", 
+            "ModemManager", 
+            "wpa_supplicant", 
+            "tailscaled", 
+            "voiceguard", 
+            "protectqube", 
+            "device-manager-backend", 
+            "device-manager-frontend"
+        )
+        if service_name not in allowed_services:
             return {"success": False, "message": f"Service '{service_name}' is not in the whitelist."}
+        if action not in ("start", "stop", "restart"):
+            return {"success": False, "message": f"Action '{action}' is not supported. Use start, stop, or restart."}
+            
         if os.name != 'posix':
-            return {"success": True, "message": f"Mock: Successfully restarted service '{service_name}'."}
+            return {"success": True, "message": f"Mock: Successfully performed '{action}' on service '{service_name}'."}
         try:
-            result = subprocess.run(["sudo", "systemctl", "restart", service_name], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(["sudo", "systemctl", action, service_name], capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
-                return {"success": True, "message": f"Successfully restarted service '{service_name}'."}
+                return {"success": True, "message": f"Successfully performed '{action}' on service '{service_name}'."}
             else:
-                return {"success": False, "message": f"Failed to restart service: {result.stderr.strip()}"}
+                return {"success": False, "message": f"Failed to execute {action} on service: {result.stderr.strip()}"}
         except Exception as e:
-            return {"success": False, "message": f"Failed to restart service: {str(e)}"}
+            return {"success": False, "message": f"Failed to control service: {str(e)}"}
+
+    @staticmethod
+    def get_multimedia_devices() -> dict:
+        cameras = []
+        microphones = []
+        
+        # 1. Cameras
+        v4l_path = "/sys/class/video4linux"
+        if os.path.exists(v4l_path) and os.name == 'posix':
+            try:
+                for d in os.listdir(v4l_path):
+                    name_file = os.path.join(v4l_path, d, "name")
+                    if os.path.exists(name_file):
+                        with open(name_file, "r") as f:
+                            name = f.read().strip()
+                        cameras.append({
+                            "device": f"/dev/{d}",
+                            "name": name,
+                            "type": "camera"
+                        })
+            except Exception:
+                pass
+        else:
+            cameras = [{"device": "/dev/video0", "name": "Orange Pi Camera Module (OV13850)", "type": "camera"}]
+            
+        # 2. Microphones
+        asound_cards = "/proc/asound/cards"
+        if os.path.exists(asound_cards) and os.name == 'posix':
+            try:
+                with open(asound_cards, "r") as f:
+                    content = f.read().strip()
+                lines = content.split("\n")
+                for i in range(0, len(lines), 2):
+                    line = lines[i].strip()
+                    if not line:
+                        continue
+                    match = re.match(r"^\s*(\d+)\s+\[([^\]]+)\]:\s+(.*)$", line)
+                    if match:
+                        idx, short_name, desc = match.groups()
+                        microphones.append({
+                            "id": idx,
+                            "name": f"{short_name.strip()} ({desc.strip()})",
+                            "type": "microphone"
+                        })
+            except Exception:
+                pass
+        else:
+            microphones = [{"id": "0", "name": "RK809 Audio Capture (Analog Microphone)", "type": "microphone"}]
+            
+        return {
+            "cameras": cameras,
+            "microphones": microphones
+        }
+
 
     @classmethod
     def get_all_metrics(cls) -> dict:

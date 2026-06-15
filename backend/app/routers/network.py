@@ -177,3 +177,11 @@ async def toggle_interface(req: InterfaceToggleRequest, current_user: str = Depe
         raise HTTPException(status_code=400, detail=result.get("message"))
     return result
 
+@router.post("/wifi/disconnect")
+async def disconnect_wifi(current_user: str = Depends(get_current_user)):
+    result = NetworkService.disconnect_wifi()
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return result
+
+

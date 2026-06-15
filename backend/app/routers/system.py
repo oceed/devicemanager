@@ -12,8 +12,9 @@ router = APIRouter(prefix="/api/system", tags=["system"])
 class UsbResetRequest(BaseModel):
     path: str
 
-class ServiceRestartRequest(BaseModel):
+class ServiceControlRequest(BaseModel):
     service_name: str
+    action: str
 
 @router.get("/metrics")
 async def get_metrics(current_user: str = Depends(get_current_user)):
@@ -52,12 +53,16 @@ async def reset_usb_device(req: UsbResetRequest, current_user: str = Depends(get
 async def get_services(current_user: str = Depends(get_current_user)):
     return SystemService.get_services()
 
-@router.post("/services/restart")
-async def restart_service(req: ServiceRestartRequest, current_user: str = Depends(get_current_user)):
-    res = SystemService.restart_service(req.service_name)
+@router.post("/services/control")
+async def control_service(req: ServiceControlRequest, current_user: str = Depends(get_current_user)):
+    res = SystemService.control_service(req.service_name, req.action)
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("message"))
     return res
+
+@router.get("/multimedia")
+async def get_multimedia_devices(current_user: str = Depends(get_current_user)):
+    return SystemService.get_multimedia_devices()
 
 @router.get("/modem")
 async def get_modem_info(modem_id: Optional[str] = "0", current_user: str = Depends(get_current_user)):
