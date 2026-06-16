@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, system, network
 from app.services.watchdog_service import WatchdogService
+from app.services.mqtt_service import MqttService
 
 app = FastAPI(
     title="Orange Pi 5 Pro Device Manager API",
@@ -26,10 +27,12 @@ app.include_router(network.router)
 @app.on_event("startup")
 async def startup_event():
     WatchdogService().start()
+    MqttService().start()
 
 @app.on_event("shutdown")
 async def shutdown_event():
     WatchdogService().stop()
+    MqttService().stop()
 
 
 @app.get("/api/health")

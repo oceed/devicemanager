@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, RefreshCw, Radio, HardDrive, ToggleLeft, ToggleRight, CheckCircle2, AlertTriangle, Play, HelpCircle, Loader2, Signal, AlertCircle, Trash2, Square, Video, Mic } from 'lucide-react';
+import { Cpu, RefreshCw, Radio, HardDrive, ToggleLeft, ToggleRight, CheckCircle2, AlertTriangle, Play, HelpCircle, Loader2, Signal, AlertCircle, Trash2, Square, Video, Mic, Activity } from 'lucide-react';
 
 export default function RecoveryTab() {
   const [usbDevices, setUsbDevices] = useState([]);
@@ -18,6 +18,21 @@ export default function RecoveryTab() {
     last_healing_time: null,
     last_healing_action: null,
     logs: []
+  });
+
+  const [mqtt, setMqtt] = useState({
+    enabled: false,
+    broker_host: 'localhost',
+    broker_port: 1883,
+    username: '',
+    password: '',
+    device_id: 'orange-pi-edge',
+    heartbeat_topic: 'device/orange-pi-edge/heartbeat',
+    heartbeat_interval: 30,
+    telemetry_topic: 'device/orange-pi-edge/telemetry',
+    telemetry_interval: 60,
+    connection_status: 'disconnected',
+    error_message: null
   });
 
   const [loading, setLoading] = useState(true);
@@ -54,6 +69,13 @@ export default function RecoveryTab() {
       const wdData = await wdRes.json();
       if (wdData && !wdData.detail) {
         setWatchdog(wdData);
+      }
+
+      // 4b. Fetch MQTT status
+      const mqttRes = await fetch('/api/system/mqtt', { headers });
+      const mqttData = await mqttRes.json();
+      if (mqttData && !mqttData.detail) {
+        setMqtt(mqttData);
       }
 
       // 5. Fetch Modem info
@@ -222,6 +244,64 @@ export default function RecoveryTab() {
       }
     } catch (err) {
       showStatus('error', err.message);
+    }
+  };
+
+  const [mqttSubmitting, setMqttSubmitting] = useState(false);
+
+  const handleToggleMqtt = async () => {
+    const nextState = !mqtt.enabled;
+    setMqttSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/system/mqtt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...mqtt,
+          enabled: nextState
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to configure MQTT');
+      setMqtt(data.status);
+      showStatus('success', `MQTT telemetry ${nextState ? 'enabled' : 'disabled'} successfully.`);
+    } catch (err) {
+      showStatus('error', err.message);
+    } finally {
+      setMqttSubmitting(false);
+    }
+  };
+
+  const handleSaveMqttSettings = async (e) => {
+    e.preventDefault();
+    setMqttSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/system/mqtt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...mqtt,
+          broker_port: Number(mqtt.broker_port),
+          heartbeat_interval: Number(mqtt.heartbeat_interval),
+          telemetry_interval: Number(mqtt.telemetry_interval)
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to update MQTT settings');
+      setMqtt(data.status);
+      showStatus('success', 'MQTT settings updated.');
+    } catch (err) {
+      showStatus('error', err.message);
+    } finally {
+      setMqttSubmitting(false);
     }
   };
 
@@ -694,7 +774,224 @@ export default function RecoveryTab() {
                   </div>
                 )}
               </div>
+          </div>
+
+          {/* MQTT Configuration Card */}
+          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
+            {/* Header with Switch */}
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Activity size={18} className="text-brand-orange" />
+                <span>MQTT Heartbeat & Telemetry</span>
+              </h2>
+
+              <button
+                onClick={handleToggleMqtt}
+                disabled={mqttSubmitting}
+                className="text-gray-400 hover:text-brand-orange transition-colors"
+                title={mqtt.enabled ? 'Disable MQTT Integration' : 'Enable MQTT Integration'}
+              >
+                {mqtt.enabled ? (
+                  <ToggleRight size={36} className="text-brand-orange cursor-pointer" />
+                ) : (
+                  <ToggleLeft size={36} className="cursor-pointer" />
+                )}
+              </button>
             </div>
+
+            {/* Connection Status Banner */}
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div className="p-3.5 bg-gray-50 dark:bg-zinc-950 rounded-xl border border-gray-100 dark:border-zinc-800/50">
+                <div className="text-[10px] font-bold text-gray-400 uppercase">Broker Status</div>
+                <div className="flex items-center gap-1.5 mt-1 font-bold text-xs">
+                  <span className={`w-2 h-2 rounded-full ${
+                    mqtt.connection_status === 'connected' 
+                      ? 'bg-emerald-500 animate-pulse' 
+                      : mqtt.connection_status === 'connecting'
+                      ? 'bg-amber-500 animate-pulse'
+                      : mqtt.connection_status === 'error'
+                      ? 'bg-red-500 animate-pulse'
+                      : 'bg-zinc-400'
+                  }`} />
+                  <span className={
+                    mqtt.connection_status === 'connected' 
+                      ? 'text-emerald-600 dark:text-emerald-400' 
+                      : mqtt.connection_status === 'connecting'
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : mqtt.connection_status === 'error'
+                      ? 'text-red-500 dark:text-red-400'
+                      : 'text-zinc-500'
+                  }>
+                    {mqtt.connection_status.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="p-3.5 bg-gray-50 dark:bg-zinc-950 rounded-xl border border-gray-100 dark:border-zinc-800/50">
+                <div className="text-[10px] font-bold text-gray-400 uppercase">Device ID</div>
+                <div className="mt-1 font-bold text-xs text-gray-800 dark:text-zinc-200 truncate" title={mqtt.device_id}>
+                  {mqtt.device_id}
+                </div>
+              </div>
+            </div>
+
+            {mqtt.connection_status === 'error' && mqtt.error_message && (
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/25 border border-red-200 dark:border-red-900/30 rounded-xl text-[10px] font-semibold text-red-600 dark:text-red-400 flex items-start gap-2">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <span>{mqtt.error_message}</span>
+              </div>
+            )}
+
+            {/* Settings Form */}
+            <form onSubmit={handleSaveMqttSettings} className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                    Broker Host
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={mqtt.broker_host}
+                    onChange={(e) => setMqtt(prev => ({ ...prev, broker_host: e.target.value }))}
+                    placeholder="localhost"
+                    className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-850 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-semibold"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                    Port
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    max={65535}
+                    value={mqtt.broker_port}
+                    onChange={(e) => setMqtt(prev => ({ ...prev, broker_port: e.target.value }))}
+                    placeholder="1883"
+                    className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-850 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={mqtt.username || ''}
+                    onChange={(e) => setMqtt(prev => ({ ...prev, username: e.target.value }))}
+                    placeholder="Optional"
+                    className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-850 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={mqtt.password || ''}
+                    onChange={(e) => setMqtt(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="Optional"
+                    className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-850 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                  Device / Client ID
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={mqtt.device_id}
+                  onChange={(e) => setMqtt(prev => ({ 
+                    ...prev, 
+                    device_id: e.target.value,
+                    heartbeat_topic: `device/${e.target.value}/heartbeat`,
+                    telemetry_topic: `device/${e.target.value}/telemetry`
+                  }))}
+                  placeholder="orange-pi-edge"
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-850 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-semibold"
+                />
+              </div>
+
+              <div className="border-t border-gray-100 dark:border-zinc-800/50 pt-3 space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                      Heartbeat Topic
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={mqtt.heartbeat_topic}
+                      onChange={(e) => setMqtt(prev => ({ ...prev, heartbeat_topic: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-850 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-semibold font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                      Interval (s)
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={5}
+                      value={mqtt.heartbeat_interval}
+                      onChange={(e) => setMqtt(prev => ({ ...prev, heartbeat_interval: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-850 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                      Telemetry Topic
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={mqtt.telemetry_topic}
+                      onChange={(e) => setMqtt(prev => ({ ...prev, telemetry_topic: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-850 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-semibold font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                      Interval (s)
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={10}
+                      value={mqtt.telemetry_interval}
+                      onChange={(e) => setMqtt(prev => ({ ...prev, telemetry_interval: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-gray-300 dark:border-zinc-850 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={mqttSubmitting}
+                  className="w-full py-2 bg-brand-orange hover:bg-brand-orange-600 text-white font-semibold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {mqttSubmitting ? <Loader2 size={12} className="animate-spin" /> : null}
+                  <span>Save Settings</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
