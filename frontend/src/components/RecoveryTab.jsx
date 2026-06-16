@@ -774,6 +774,7 @@ export default function RecoveryTab() {
                   </div>
                 )}
               </div>
+            </div>
           </div>
 
           {/* MQTT Configuration Card */}
