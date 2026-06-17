@@ -277,7 +277,7 @@ class NetworkService:
                 if not line.strip():
                     continue
                 parts = line.split(":")
-                if len(parts) >= 2 and parts[1] == "802-11-wireless":
+                if len(parts) >= 2 and parts[1] in ("wifi", "802-11-wireless"):
                     conn_name = parts[0]
                     mode_out = subprocess.check_output(
                         ["nmcli", "-t", "-g", "802-11-wireless.mode", "connection", "show", conn_name],
@@ -320,7 +320,7 @@ class NetworkService:
                 if not line.strip():
                     continue
                 parts = line.split(":")
-                if len(parts) >= 2 and parts[1] == "802-11-wireless":
+                if len(parts) >= 2 and parts[1] in ("wifi", "802-11-wireless"):
                     conn_name = parts[0]
                     try:
                         mode_val = subprocess.check_output(

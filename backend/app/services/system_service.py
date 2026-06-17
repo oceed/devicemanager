@@ -412,6 +412,12 @@ class SystemService:
             }
             
         try:
+            # Force update vnstat database from kernel stats immediately for real-time monitoring
+            try:
+                run_host_cmd(["vnstat", "-u"])
+            except Exception:
+                pass
+
             res = run_host_cmd(["vnstat", "--json"])
             if res.returncode != 0:
                 raise Exception(res.stderr or "vnstat returned non-zero code")
