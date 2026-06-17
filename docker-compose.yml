@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: device-manager-backend
     network_mode: host
+    pid: host
     privileged: true
     restart: unless-stopped
     volumes:

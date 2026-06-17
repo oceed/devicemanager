@@ -3,6 +3,11 @@ import re
 import psutil
 import time
 import subprocess
+from app.services.utils import run_host_cmd, check_host_output
+
+# Alias subprocess calls to run on host namespace when possible to avoid version mismatch issues
+subprocess.run = run_host_cmd
+subprocess.check_output = check_host_output
 
 class SystemService:
     @staticmethod

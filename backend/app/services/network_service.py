@@ -4,6 +4,11 @@ import tempfile
 import os
 import re
 import json
+from app.services.utils import run_host_cmd, check_host_output
+
+# Alias subprocess calls to run on host namespace when possible to avoid version mismatch issues
+subprocess.run = run_host_cmd
+subprocess.check_output = check_host_output
 
 class NetworkService:
     @staticmethod
@@ -117,20 +122,57 @@ class NetworkService:
             return []
 
     @classmethod
-    def connect_wifi(cls, ssid: str, password: str) -> dict:
+    def connect_wifi(cls, ssid: str, password: str = None) -> dict:
         if not cls.is_nmcli_available():
             return {"success": True, "message": f"Mock: Connected to Wi-Fi '{ssid}' successfully."}
             
         try:
-            cmd = ["nmcli", "device", "wifi", "connect", ssid]
-            if password:
-                cmd.extend(["password", password])
-                
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-            if result.returncode == 0:
-                return {"success": True, "message": f"Successfully connected to {ssid}"}
+            # 1. Check if a connection profile already exists for this SSID
+            existing_conn = None
+            try:
+                out = subprocess.check_output(
+                    ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+                    text=True
+                ).strip()
+                for line in out.split("\n"):
+                    if not line.strip():
+                        continue
+                    parts = line.split(":")
+                    if len(parts) >= 2 and parts[1] == "802-11-wireless" and parts[0] == ssid:
+                        existing_conn = parts[0]
+                        break
+            except Exception:
+                pass
+
+            # 2. Connect based on whether profile exists and password is provided
+            if existing_conn:
+                if password:
+                    # Update password in existing profile
+                    subprocess.run(["nmcli", "connection", "modify", existing_conn, "802-11-wireless-security.psk", password], check=True)
+                # Up the connection
+                result = subprocess.run(["nmcli", "connection", "up", existing_conn], capture_output=True, text=True, timeout=20)
+                if result.returncode == 0:
+                    return {"success": True, "message": f"Successfully connected to saved Wi-Fi: {ssid}"}
+                else:
+                    # If connecting to saved profile failed, try to connect using wifi connect cmd
+                    cmd = ["nmcli", "device", "wifi", "connect", ssid]
+                    if password:
+                        cmd.extend(["password", password])
+                    result2 = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+                    if result2.returncode == 0:
+                        return {"success": True, "message": f"Successfully connected to Wi-Fi: {ssid}"}
+                    else:
+                        return {"success": False, "message": f"Failed to connect to saved Wi-Fi. Retry error: {result2.stderr.strip()}"}
             else:
-                return {"success": False, "message": result.stderr.strip()}
+                # No existing profile, connect as new
+                cmd = ["nmcli", "device", "wifi", "connect", ssid]
+                if password:
+                    cmd.extend(["password", password])
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+                if result.returncode == 0:
+                    return {"success": True, "message": f"Successfully connected to Wi-Fi: {ssid}"}
+                else:
+                    return {"success": False, "message": result.stderr.strip()}
         except Exception as e:
             return {"success": False, "message": str(e)}
 
@@ -182,16 +224,22 @@ class NetworkService:
                 cmd_mod = ["nmcli", "connection", "modify", conn_name, "ipv4.method", "manual", "ipv4.addresses", ip]
                 if gateway:
                     cmd_mod.extend(["ipv4.gateway", gateway])
+                else:
+                    cmd_mod.extend(["ipv4.gateway", ""])
                 if dns:
                     cmd_mod.extend(["ipv4.dns", dns])
+                else:
+                    cmd_mod.extend(["ipv4.dns", ""])
                     
                 subprocess.run(cmd_mod, check=True)
 
             # 3. Reload and Up the connection to apply changes
+            subprocess.run(["nmcli", "connection", "reload"], check=True)
             subprocess.run(["nmcli", "connection", "up", conn_name], check=True, timeout=15)
             return {"success": True, "message": f"IP Configuration updated and applied to {device}"}
         except subprocess.CalledProcessError as e:
-            return {"success": False, "message": f"Subprocess error: {e.stderr if hasattr(e, 'stderr') else str(e)}"}
+            err_msg = e.stderr if (hasattr(e, 'stderr') and e.stderr) else (e.stdout if (hasattr(e, 'stdout') and e.stdout) else str(e))
+            return {"success": False, "message": f"Subprocess error: {err_msg.strip() if hasattr(err_msg, 'strip') else str(err_msg)}"}
         except Exception as e:
             return {"success": False, "message": str(e)}
 

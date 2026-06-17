@@ -5,6 +5,11 @@ import threading
 import subprocess
 import shutil
 from datetime import datetime
+from app.services.utils import run_host_cmd, check_host_output
+
+# Alias subprocess calls to run on host namespace when possible to avoid version mismatch issues
+subprocess.run = run_host_cmd
+subprocess.check_output = check_host_output
 
 class WatchdogService:
     _instance = None
