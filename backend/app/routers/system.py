@@ -43,12 +43,16 @@ async def control_system(action: str, current_user: str = Depends(get_current_us
         raise HTTPException(status_code=400, detail="Invalid action. Use 'reboot' or 'shutdown'.")
         
     try:
-        if action == "reboot":
-            subprocess.Popen(["sudo", "reboot"])
-            return {"success": True, "message": "System reboot initiated."}
-        elif action == "shutdown":
-            subprocess.Popen(["sudo", "poweroff"])
-            return {"success": True, "message": "System shutdown initiated."}
+        from app.services.utils import check_nsenter_support
+        
+        cmd = ["sudo", "reboot"] if action == "reboot" else ["sudo", "poweroff"]
+        if check_nsenter_support():
+            if cmd and cmd[0] == "sudo":
+                cmd.pop(0)
+            cmd = ["nsenter", "-t", "1", "-m", "-u", "-n", "-i", "--"] + cmd
+            
+        subprocess.Popen(cmd)
+        return {"success": True, "message": f"System {action} initiated."}
     except Exception as e:
         return {"success": False, "message": f"Could not perform action on host: {str(e)}"}
 
