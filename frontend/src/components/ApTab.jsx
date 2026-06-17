@@ -5,6 +5,7 @@ export default function ApTab() {
   const [apStatus, setApStatus] = useState(null);
   const [ssid, setSsid] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedProfileName, setSelectedProfileName] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
@@ -22,6 +23,7 @@ export default function ApTab() {
       if (data) {
         setSsid(data.ssid || 'OrangePi-Hotspot');
         setPassword(data.password || 'password123');
+        setSelectedProfileName(data.connection_name || 'OrangePi-Hotspot');
       }
     } catch (err) {
       console.error(err);
@@ -49,7 +51,8 @@ export default function ApTab() {
           active: targetActive,
           ssid,
           password,
-          interface: apStatus?.interface || 'wlan0'
+          interface: apStatus?.interface || 'wlan0',
+          connection_name: selectedProfileName === 'NEW_PROFILE' ? ssid : selectedProfileName
         })
       });
 
@@ -68,6 +71,20 @@ export default function ApTab() {
       setStatusMsg({ type: 'error', text: err.message || 'Error occurred during Hotspot toggle.' });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleProfileChange = (name) => {
+    setSelectedProfileName(name);
+    if (name === 'NEW_PROFILE') {
+      setSsid('');
+      setPassword('');
+    } else {
+      const prof = apStatus.available_profiles?.find(p => p.name === name);
+      if (prof) {
+        setSsid(prof.ssid || '');
+        setPassword(prof.password || '');
+      }
     }
   };
 
@@ -118,6 +135,27 @@ export default function ApTab() {
         )}
 
         <form onSubmit={handleSaveSettings} className="space-y-5">
+          {apStatus?.available_profiles && apStatus.available_profiles.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1">
+                <Radio size={14} className="text-gray-400 dark:text-zinc-500" />
+                <span>Select Access Point Profile</span>
+              </label>
+              <select
+                value={selectedProfileName}
+                onChange={(e) => handleProfileChange(e.target.value)}
+                className="w-full px-4 py-2.5 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-sm font-semibold"
+              >
+                {apStatus.available_profiles.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name} ({p.ssid}) {p.active ? '• Active' : ''}
+                  </option>
+                ))}
+                <option value="NEW_PROFILE">+ Create New Hotspot Profile</option>
+              </select>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1">
               <User size={14} className="text-gray-400 dark:text-zinc-500" />

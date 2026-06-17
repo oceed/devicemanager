@@ -237,11 +237,11 @@ export default function DashboardTab() {
               <div className="p-3 bg-gray-50/50 dark:bg-zinc-950/20 border border-gray-100/50 dark:border-zinc-850/20 rounded-xl">
                 <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase mb-1">
                   <span>Today</span>
-                  <span className="text-brand-orange">{bandwidth?.today?.total_gb ?? 0} GB</span>
+                  <span className="text-brand-orange">{bandwidth?.today?.total_mb ?? 0} MB</span>
                 </div>
                 <div className="flex justify-between text-[11px] text-gray-500 dark:text-zinc-400">
-                  <span>Download: {bandwidth?.today?.rx_gb ?? 0} GB</span>
-                  <span>Upload: {bandwidth?.today?.tx_gb ?? 0} GB</span>
+                  <span>Download: {bandwidth?.today?.rx_mb ?? 0} MB</span>
+                  <span>Upload: {bandwidth?.today?.tx_mb ?? 0} MB</span>
                 </div>
               </div>
               
@@ -249,11 +249,11 @@ export default function DashboardTab() {
               <div className="p-3 bg-gray-50/50 dark:bg-zinc-950/20 border border-gray-100/50 dark:border-zinc-850/20 rounded-xl">
                 <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase mb-1">
                   <span>This Week</span>
-                  <span className="text-brand-orange">{bandwidth?.week?.total_gb ?? 0} GB</span>
+                  <span className="text-brand-orange">{bandwidth?.week?.total_mb ?? 0} MB</span>
                 </div>
                 <div className="flex justify-between text-[11px] text-gray-500 dark:text-zinc-400">
-                  <span>Download: {bandwidth?.week?.rx_gb ?? 0} GB</span>
-                  <span>Upload: {bandwidth?.week?.tx_gb ?? 0} GB</span>
+                  <span>Download: {bandwidth?.week?.rx_mb ?? 0} MB</span>
+                  <span>Upload: {bandwidth?.week?.tx_mb ?? 0} MB</span>
                 </div>
               </div>
               
@@ -261,11 +261,11 @@ export default function DashboardTab() {
               <div className="p-3 bg-gray-50/50 dark:bg-zinc-950/20 border border-gray-100/50 dark:border-zinc-850/20 rounded-xl">
                 <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase mb-1">
                   <span>This Month</span>
-                  <span className="text-brand-orange">{bandwidth?.month?.total_gb ?? 0} GB</span>
+                  <span className="text-brand-orange">{bandwidth?.month?.total_mb ?? 0} MB</span>
                 </div>
                 <div className="flex justify-between text-[11px] text-gray-500 dark:text-zinc-400">
-                  <span>Download: {bandwidth?.month?.rx_gb ?? 0} GB</span>
-                  <span>Upload: {bandwidth?.month?.tx_gb ?? 0} GB</span>
+                  <span>Download: {bandwidth?.month?.rx_mb ?? 0} MB</span>
+                  <span>Upload: {bandwidth?.month?.tx_mb ?? 0} MB</span>
                 </div>
               </div>
             </div>

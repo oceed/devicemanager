@@ -24,6 +24,7 @@ class ApConfigRequest(BaseModel):
     ssid: Optional[str] = "OrangePi-Hotspot"
     password: Optional[str] = "password123"
     interface: Optional[str] = "wlan0"
+    connection_name: Optional[str] = None
 
 class VpnImportRequest(BaseModel):
     name: str
@@ -91,7 +92,8 @@ async def configure_ap(req: ApConfigRequest, current_user: str = Depends(get_cur
         active=req.active,
         ssid=req.ssid,
         password=req.password,
-        interface=req.interface
+        interface=req.interface,
+        connection_name=req.connection_name
     )
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("message"))

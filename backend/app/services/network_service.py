@@ -99,8 +99,9 @@ class NetworkService:
             except Exception:
                 pass
 
-            # Rescan wifi networks
-            subprocess.run(["nmcli", "device", "wifi", "rescan"], capture_output=True, timeout=5)
+            # Rescan wifi networks (Skip rescan if device is hosting a hotspot/AP mode connection to prevent severe network lag/freezing)
+            if not cls.is_ap_mode_active():
+                subprocess.run(["nmcli", "device", "wifi", "rescan"], capture_output=True, timeout=5)
             
             output = subprocess.check_output(
                 ["nmcli", "-t", "-f", "ACTIVE,SSID,BSSID,SIGNAL,SECURITY", "device", "wifi", "list"],
@@ -261,6 +262,101 @@ class NetworkService:
             return {"success": False, "message": str(e)}
 
     @classmethod
+    def is_ap_mode_active(cls) -> bool:
+        """
+        Check if there is any active wireless connection currently configured in AP (Access Point) mode.
+        """
+        if not cls.is_nmcli_available():
+            return False
+        try:
+            active_out = subprocess.check_output(
+                ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active"],
+                text=True
+            ).strip()
+            for line in active_out.split("\n"):
+                if not line.strip():
+                    continue
+                parts = line.split(":")
+                if len(parts) >= 2 and parts[1] == "802-11-wireless":
+                    conn_name = parts[0]
+                    mode_out = subprocess.check_output(
+                        ["nmcli", "-t", "-g", "802-11-wireless.mode", "connection", "show", conn_name],
+                        text=True
+                    ).strip()
+                    if mode_out == "ap":
+                        return True
+        except Exception:
+            pass
+        return False
+
+    @classmethod
+    def find_ap_connections(cls) -> list:
+        """
+        Finds all saved connection profiles configured in AP (Access Point) mode.
+        """
+        if not cls.is_nmcli_available():
+            return []
+        
+        ap_profiles = []
+        try:
+            active_names = {}
+            active_out = subprocess.check_output(
+                ["nmcli", "-t", "-f", "NAME,DEVICE", "connection", "show", "--active"],
+                text=True
+            ).strip()
+            for line in active_out.split("\n"):
+                if not line.strip():
+                    continue
+                parts = line.split(":")
+                if len(parts) >= 2:
+                    active_names[parts[0]] = parts[1]
+
+            all_conns = subprocess.check_output(
+                ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+                text=True
+            ).strip()
+            
+            for line in all_conns.split("\n"):
+                if not line.strip():
+                    continue
+                parts = line.split(":")
+                if len(parts) >= 2 and parts[1] == "802-11-wireless":
+                    conn_name = parts[0]
+                    try:
+                        mode_val = subprocess.check_output(
+                            ["nmcli", "-t", "-g", "802-11-wireless.mode", "connection", "show", conn_name],
+                            text=True
+                        ).strip()
+                        if mode_val == "ap":
+                            ssid_val = ""
+                            psk_val = ""
+                            try:
+                                details = subprocess.check_output(
+                                    ["nmcli", "-s", "-g", "802-11-wireless.ssid,802-11-wireless-security.psk", "connection", "show", conn_name],
+                                    text=True
+                                ).strip().split("\n")
+                                if len(details) >= 1:
+                                    ssid_val = details[0]
+                                if len(details) >= 2:
+                                    psk_val = details[1]
+                            except Exception:
+                                pass
+                            
+                            is_active = conn_name in active_names
+                            ap_profiles.append({
+                                "name": conn_name,
+                                "ssid": ssid_val or conn_name,
+                                "password": psk_val,
+                                "active": is_active,
+                                "interface": active_names.get(conn_name, "wlan0")
+                            })
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        return ap_profiles
+
+    @classmethod
     def get_ap_status(cls) -> dict:
         if not cls.is_nmcli_available():
             return {
@@ -268,96 +364,112 @@ class NetworkService:
                 "ssid": "ProtectQube-AP-Mock",
                 "password": "password123",
                 "interface": "wlan0",
-                "ip": "192.168.150.1"
+                "ip": "192.168.150.1",
+                "connection_name": "OrangePi-Hotspot",
+                "available_profiles": [
+                    {"name": "OrangePi-Hotspot", "ssid": "OrangePi-Hotspot", "password": "password123", "active": False, "interface": "wlan0"},
+                    {"name": "pqbai", "ssid": "PQBb7353_1522", "password": "password456", "active": False, "interface": "wlan0"}
+                ]
             }
             
-        try:
-            # Check if AP connection "OrangePi-Hotspot" is active
-            output = subprocess.check_output(
-                ["nmcli", "-t", "-f", "NAME,STATE,DEVICE", "connection", "show", "--active"],
-                text=True
-            ).strip()
-            
-            active = False
-            ssid = ""
-            interface = ""
-            
-            for line in output.split("\n"):
-                if not line.strip():
-                    continue
-                parts = line.split(":")
-                if len(parts) >= 3 and parts[0] == "OrangePi-Hotspot":
-                    active = True
-                    interface = parts[2]
-                    
-            # Read profile details to get SSID and password
-            ssid = "OrangePi-Hotspot"
-            password = ""
-            try:
-                details = subprocess.check_output(
-                    ["nmcli", "-s", "-g", "802-11-wireless.ssid,802-11-wireless-security.psk", "connection", "show", "OrangePi-Hotspot"],
-                    text=True
-                ).strip().split("\n")
-                if len(details) >= 1 and details[0]:
-                    ssid = details[0]
-                if len(details) >= 2 and details[1]:
-                    password = details[1]
-            except Exception:
-                pass
+        profiles = cls.find_ap_connections()
+        
+        active_profile = None
+        for p in profiles:
+            if p["active"]:
+                active_profile = p
+                break
                 
+        if active_profile:
+            ip_val = ""
+            dev = active_profile["interface"]
+            if dev:
+                try:
+                    ip_out = subprocess.check_output(
+                        ["nmcli", "-t", "-f", "IP4.ADDRESS", "device", "show", dev],
+                        text=True
+                    ).strip()
+                    for ip_line in ip_out.split("\n"):
+                        if ip_line.startswith("IP4.ADDRESS[1]"):
+                            ip_val = ip_line.split(":")[1].split("/")[0]
+                except Exception:
+                    pass
             return {
-                "active": active,
-                "ssid": ssid,
-                "password": password,
-                "interface": interface or "wlan0",
-                "ip": "192.168.150.1" if active else ""
+                "active": True,
+                "ssid": active_profile["ssid"],
+                "password": active_profile["password"],
+                "interface": active_profile["interface"] or "wlan0",
+                "ip": ip_val or "192.168.150.1",
+                "connection_name": active_profile["name"],
+                "available_profiles": profiles
             }
-        except Exception:
-            return {"active": False, "ssid": "", "password": "", "interface": "wlan0", "ip": ""}
+            
+        if profiles:
+            first = profiles[0]
+            return {
+                "active": False,
+                "ssid": first["ssid"],
+                "password": first["password"],
+                "interface": first["interface"] or "wlan0",
+                "ip": "",
+                "connection_name": first["name"],
+                "available_profiles": profiles
+            }
+            
+        return {
+            "active": False,
+            "ssid": "OrangePi-Hotspot",
+            "password": "password123",
+            "interface": "wlan0",
+            "ip": "",
+            "connection_name": "OrangePi-Hotspot",
+            "available_profiles": []
+        }
 
     @classmethod
-    def set_ap_mode(cls, active: bool, ssid: str = "OrangePi-Hotspot", password: str = "password123", interface: str = "wlan0") -> dict:
+    def set_ap_mode(cls, active: bool, ssid: str = "OrangePi-Hotspot", password: str = "password123", interface: str = "wlan0", connection_name: str = None) -> dict:
         if not cls.is_nmcli_available():
             return {"success": True, "message": f"Mock: Hotspot mode set to {active} with SSID '{ssid}'"}
             
         try:
-            con_name = "OrangePi-Hotspot"
-            
-            # Check if profile exists
-            check_con = subprocess.run(["nmcli", "connection", "show", con_name], capture_output=True)
-            exists = check_con.returncode == 0
-            
             if not active:
-                # Bring down AP if active
-                if exists:
-                    subprocess.run(["nmcli", "connection", "down", con_name], capture_output=True)
+                profiles = cls.find_ap_connections()
+                target_conns = [p["name"] for p in profiles if p["active"]]
+                if connection_name and connection_name not in target_conns:
+                    target_conns.append(connection_name)
+                    
+                if not target_conns:
+                    target_conns = ["OrangePi-Hotspot"]
+                    
+                for conn in target_conns:
+                    subprocess.run(["nmcli", "connection", "down", conn], capture_output=True)
                 return {"success": True, "message": "Access Point turned off."}
 
             if not password or len(password) < 8:
                 return {"success": False, "message": "WPA2 Password must be at least 8 characters long."}
 
-            # Create or modify the AP profile
+            con_name = connection_name or "OrangePi-Hotspot"
+            
+            check_con = subprocess.run(["nmcli", "connection", "show", con_name], capture_output=True)
+            exists = check_con.returncode == 0
+            
             if not exists:
-                # Add connection
                 subprocess.run([
                     "nmcli", "connection", "add", "type", "wifi", "ifname", interface, "con-name", con_name,
                     "autoconnect", "no", "ssid", ssid
                 ], check=True)
             else:
-                # Modify SSID
                 subprocess.run(["nmcli", "connection", "modify", con_name, "ssid", ssid], check=True)
                 
-            # Set mode to AP, manual shared IP (automatically starts DHCP server in NetworkManager)
             subprocess.run([
                 "nmcli", "connection", "modify", con_name,
                 "802-11-wireless.mode", "ap",
                 "802-11-wireless.band", "bg",
-                "ipv4.method", "shared", # shared method handles NAT, routing, and DHCP
+                "ipv4.method", "shared",
                 "wifi-sec.key-mgmt", "wpa-psk",
                 "wifi-sec.psk", password
             ], check=True)
             
-            # Start AP
             result = subprocess.run(["nmcli", "connection", "up", con_name], capture_output=True, text=True, timeout=15)
             if result.returncode == 0:
                 return {"success": True, "message": f"Hotspot activated successfully with SSID: {ssid}"}

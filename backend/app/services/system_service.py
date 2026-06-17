@@ -406,9 +406,9 @@ class SystemService:
             return {
                 "supported": False,
                 "message": "vnstat is not installed on the host. Install it using 'sudo apt install vnstat'",
-                "today": {"rx_gb": 0.450, "tx_gb": 0.120, "total_gb": 0.570},
-                "week": {"rx_gb": 3.120, "tx_gb": 0.890, "total_gb": 4.010},
-                "month": {"rx_gb": 12.450, "tx_gb": 3.820, "total_gb": 16.270}
+                "today": {"rx_mb": 450.0, "tx_mb": 120.0, "total_mb": 570.0},
+                "week": {"rx_mb": 3120.0, "tx_mb": 890.0, "total_mb": 4010.0},
+                "month": {"rx_mb": 12450.0, "tx_mb": 3820.0, "total_mb": 16270.0}
             }
             
         try:
@@ -468,35 +468,35 @@ class SystemService:
                         month_rx += m.get("rx", 0)
                         month_tx += m.get("tx", 0)
                         
-            # Convert bytes to GB
-            def bytes_to_gb(b):
-                return round(b / (1024 ** 3), 3)
+            # Convert bytes to MB
+            def bytes_to_mb(b):
+                return round(b / (1024 ** 2), 2)
                 
             return {
                 "supported": True,
                 "today": {
-                    "rx_gb": bytes_to_gb(today_rx),
-                    "tx_gb": bytes_to_gb(today_tx),
-                    "total_gb": bytes_to_gb(today_rx + today_tx)
+                    "rx_mb": bytes_to_mb(today_rx),
+                    "tx_mb": bytes_to_mb(today_tx),
+                    "total_mb": bytes_to_mb(today_rx + today_tx)
                 },
                 "week": {
-                    "rx_gb": bytes_to_gb(week_rx),
-                    "tx_gb": bytes_to_gb(week_tx),
-                    "total_gb": bytes_to_gb(week_rx + week_tx)
+                    "rx_mb": bytes_to_mb(week_rx),
+                    "tx_mb": bytes_to_mb(week_tx),
+                    "total_mb": bytes_to_mb(week_rx + week_tx)
                 },
                 "month": {
-                    "rx_gb": bytes_to_gb(month_rx),
-                    "tx_gb": bytes_to_gb(month_tx),
-                    "total_gb": bytes_to_gb(month_rx + month_tx)
+                    "rx_mb": bytes_to_mb(month_rx),
+                    "tx_mb": bytes_to_mb(month_tx),
+                    "total_mb": bytes_to_mb(month_rx + month_tx)
                 }
             }
         except Exception as e:
             return {
                 "supported": False,
                 "error": str(e),
-                "today": {"rx_gb": 0.450, "tx_gb": 0.120, "total_gb": 0.570},
-                "week": {"rx_gb": 3.120, "tx_gb": 0.890, "total_gb": 4.010},
-                "month": {"rx_gb": 12.450, "tx_gb": 3.820, "total_gb": 16.270}
+                "today": {"rx_mb": 450.0, "tx_mb": 120.0, "total_mb": 570.0},
+                "week": {"rx_mb": 3120.0, "tx_mb": 890.0, "total_mb": 4010.0},
+                "month": {"rx_mb": 12450.0, "tx_mb": 3820.0, "total_mb": 16270.0}
             }
 
     @classmethod
