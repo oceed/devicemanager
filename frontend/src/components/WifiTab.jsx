@@ -239,12 +239,18 @@ export default function WifiTab() {
                       </label>
                       <input
                         type="password"
-                        required
+                        required={!selectedNetwork.saved}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
+                        placeholder={selectedNetwork.saved ? "Saved (leave empty to use saved password)" : "••••••••"}
                         className="w-full px-4 py-2.5 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-sm"
                       />
+                      {selectedNetwork.saved && (
+                        <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-1.5 flex items-center gap-1">
+                          <ShieldCheck size={12} />
+                          <span>This network is saved on the device.</span>
+                        </p>
+                      )}
                     </div>
                   )}
                   

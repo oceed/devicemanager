@@ -76,13 +76,29 @@ class NetworkService:
     def scan_wifi(cls) -> list:
         if not cls.is_nmcli_available():
             return [
-                {"ssid": "Corporate-Main-Wi-Fi", "bssid": "00:11:22:33:44:55", "signal": 95, "security": "WPA2 WPA3", "connected": True},
-                {"ssid": "Office-Guest", "bssid": "00:11:22:33:44:66", "signal": 78, "security": "WPA2", "connected": False},
-                {"ssid": "ProtectQube-AP-99F1", "bssid": "00:11:22:33:44:77", "signal": 60, "security": "WPA2", "connected": False},
-                {"ssid": "Cafe-Free-WiFi", "bssid": "aa:bb:cc:dd:ee:ff", "signal": 45, "security": "None", "connected": False}
+                {"ssid": "Corporate-Main-Wi-Fi", "bssid": "00:11:22:33:44:55", "signal": 95, "security": "WPA2 WPA3", "connected": True, "saved": True},
+                {"ssid": "Office-Guest", "bssid": "00:11:22:33:44:66", "signal": 78, "security": "WPA2", "connected": False, "saved": False},
+                {"ssid": "ProtectQube-AP-99F1", "bssid": "00:11:22:33:44:77", "signal": 60, "security": "WPA2", "connected": False, "saved": False},
+                {"ssid": "Cafe-Free-WiFi", "bssid": "aa:bb:cc:dd:ee:ff", "signal": 45, "security": "None", "connected": False, "saved": False}
             ]
             
         try:
+            # Get saved connections to mark them in scan list
+            saved_ssids = set()
+            try:
+                out_saved = subprocess.check_output(
+                    ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+                    text=True
+                ).strip()
+                for line in out_saved.split("\n"):
+                    if not line.strip():
+                        continue
+                    parts = line.split(":")
+                    if len(parts) >= 2 and parts[1] == "802-11-wireless":
+                        saved_ssids.add(parts[0])
+            except Exception:
+                pass
+
             # Rescan wifi networks
             subprocess.run(["nmcli", "device", "wifi", "rescan"], capture_output=True, timeout=5)
             
@@ -115,7 +131,8 @@ class NetworkService:
                             "bssid": bssid.replace("\\:", ":"),
                             "signal": signal,
                             "security": security.replace("\\:", ":") if security else "None",
-                            "connected": is_connected
+                            "connected": is_connected,
+                            "saved": ssid in saved_ssids
                         }
             return list(networks.values())
         except Exception as e:
