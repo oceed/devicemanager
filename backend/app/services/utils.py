@@ -3,6 +3,10 @@ import subprocess
 import shutil
 import logging
 
+# Cache original subprocess functions before any monkey-patching occurs
+_orig_run = subprocess.run
+_orig_check_output = subprocess.check_output
+
 logger = logging.getLogger("device_manager_utils")
 
 # Global flag to track whether nsenter is supported and functional
@@ -19,7 +23,7 @@ def check_nsenter_support() -> bool:
         try:
             # Test if we can access the host mount and namespaces using nsenter.
             # We run a simple check command ('true') on the host namespace (PID 1).
-            res = subprocess.run(
+            res = _orig_run(
                 ["nsenter", "-t", "1", "-m", "-u", "-n", "-i", "--", "true"],
                 capture_output=True,
                 text=True,
@@ -46,9 +50,9 @@ def run_host_cmd(cmd: list, **kwargs) -> subprocess.CompletedProcess:
         if clean_cmd and clean_cmd[0] == "sudo":
             clean_cmd.pop(0)
         wrapped_cmd = ["nsenter", "-t", "1", "-m", "-u", "-n", "-i", "--"] + clean_cmd
-        return subprocess.run(wrapped_cmd, **kwargs)
+        return _orig_run(wrapped_cmd, **kwargs)
     else:
-        return subprocess.run(cmd, **kwargs)
+        return _orig_run(cmd, **kwargs)
 
 def check_host_output(cmd: list, **kwargs) -> str:
     if "text" not in kwargs:
@@ -59,6 +63,6 @@ def check_host_output(cmd: list, **kwargs) -> str:
         if clean_cmd and clean_cmd[0] == "sudo":
             clean_cmd.pop(0)
         wrapped_cmd = ["nsenter", "-t", "1", "-m", "-u", "-n", "-i", "--"] + clean_cmd
-        return subprocess.check_output(wrapped_cmd, **kwargs)
+        return _orig_check_output(wrapped_cmd, **kwargs)
     else:
-        return subprocess.check_output(cmd, **kwargs)
+        return _orig_check_output(cmd, **kwargs)
