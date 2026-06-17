@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, HardDrive, Thermometer, RefreshCw, Power, Clock, Info, ShieldAlert } from 'lucide-react';
+import { Cpu, HardDrive, Thermometer, RefreshCw, Power, Clock, Info, ShieldAlert, ArrowDownUp } from 'lucide-react';
 
 export default function DashboardTab() {
   const [metrics, setMetrics] = useState(null);
@@ -148,6 +148,7 @@ export default function DashboardTab() {
   const npuPercent = metrics?.npu?.average ?? 0;
   const temps = metrics?.temperatures ?? {};
   const npuSupported = metrics?.npu?.supported ?? false;
+  const bandwidth = metrics?.bandwidth;
 
   return (
     <div className="space-y-6">
@@ -188,7 +189,7 @@ export default function DashboardTab() {
       </div>
 
       {/* Detailed Diagnostics Info */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Thermal Readings */}
         <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
@@ -221,6 +222,60 @@ export default function DashboardTab() {
               <p className="text-sm text-gray-400 dark:text-zinc-500">No thermal sensors found</p>
             )}
           </div>
+        </div>
+
+        {/* Internet Bandwidth Consumption */}
+        <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+              <ArrowDownUp className="text-brand-orange" size={20} />
+              <span>Data Consumption</span>
+            </h2>
+            
+            <div className="space-y-4">
+              {/* Today */}
+              <div className="p-3 bg-gray-50/50 dark:bg-zinc-950/20 border border-gray-100/50 dark:border-zinc-850/20 rounded-xl">
+                <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase mb-1">
+                  <span>Today</span>
+                  <span className="text-brand-orange">{bandwidth?.today?.total_gb ?? 0} GB</span>
+                </div>
+                <div className="flex justify-between text-[11px] text-gray-500 dark:text-zinc-400">
+                  <span>Download: {bandwidth?.today?.rx_gb ?? 0} GB</span>
+                  <span>Upload: {bandwidth?.today?.tx_gb ?? 0} GB</span>
+                </div>
+              </div>
+              
+              {/* This Week */}
+              <div className="p-3 bg-gray-50/50 dark:bg-zinc-950/20 border border-gray-100/50 dark:border-zinc-850/20 rounded-xl">
+                <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase mb-1">
+                  <span>This Week</span>
+                  <span className="text-brand-orange">{bandwidth?.week?.total_gb ?? 0} GB</span>
+                </div>
+                <div className="flex justify-between text-[11px] text-gray-500 dark:text-zinc-400">
+                  <span>Download: {bandwidth?.week?.rx_gb ?? 0} GB</span>
+                  <span>Upload: {bandwidth?.week?.tx_gb ?? 0} GB</span>
+                </div>
+              </div>
+              
+              {/* This Month */}
+              <div className="p-3 bg-gray-50/50 dark:bg-zinc-950/20 border border-gray-100/50 dark:border-zinc-850/20 rounded-xl">
+                <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase mb-1">
+                  <span>This Month</span>
+                  <span className="text-brand-orange">{bandwidth?.month?.total_gb ?? 0} GB</span>
+                </div>
+                <div className="flex justify-between text-[11px] text-gray-500 dark:text-zinc-400">
+                  <span>Download: {bandwidth?.month?.rx_gb ?? 0} GB</span>
+                  <span>Upload: {bandwidth?.month?.tx_gb ?? 0} GB</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {!bandwidth?.supported && bandwidth?.message && (
+            <p className="text-[10px] text-gray-400 dark:text-zinc-500 text-center mt-3 italic leading-relaxed">
+              * {bandwidth.message}
+            </p>
+          )}
         </div>
 
         {/* System Details & Controls */}

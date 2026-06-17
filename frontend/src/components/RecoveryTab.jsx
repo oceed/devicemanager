@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, RefreshCw, Radio, HardDrive, ToggleLeft, ToggleRight, CheckCircle2, AlertTriangle, Play, HelpCircle, Loader2, Signal, AlertCircle, Trash2, Square, Video, Mic, Activity } from 'lucide-react';
+import { Cpu, RefreshCw, Radio, HardDrive, ToggleLeft, ToggleRight, CheckCircle2, AlertTriangle, Play, HelpCircle, Loader2, Signal, AlertCircle, Trash2, Square, Video, Mic, Activity, FileText, Plus } from 'lucide-react';
 
 export default function RecoveryTab() {
   const [usbDevices, setUsbDevices] = useState([]);
@@ -41,6 +41,12 @@ export default function RecoveryTab() {
   const [modemLoading, setModemLoading] = useState(false);
   const [watchdogSubmitting, setWatchdogSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
+  const [logsModalOpen, setLogsModalOpen] = useState(false);
+  const [logTitle, setLogTitle] = useState('');
+  const [logsList, setLogsList] = useState(null);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [activeLogTab, setActiveLogTab] = useState(null);
+  const [newServiceName, setNewServiceName] = useState('');
 
   const fetchData = async () => {
     try {
@@ -227,6 +233,88 @@ export default function RecoveryTab() {
     }
   };
 
+  const handleFetchLogs = async (title, url) => {
+    setLogsLoading(true);
+    setLogTitle(title);
+    setLogsModalOpen(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      setLogsList(data);
+      
+      const dates = Object.keys(data);
+      if (dates.length > 0) {
+        setActiveLogTab(dates[0]);
+      }
+    } catch (err) {
+      console.error(`Failed to fetch logs for ${title}:`, err);
+      showStatus('error', `Failed to retrieve logs for ${title}.`);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const handleViewModemLogs = () => {
+    handleFetchLogs('ModemManager', '/api/system/modem/logs?days=3');
+  };
+
+  const handleViewServiceLogs = (serviceName) => {
+    handleFetchLogs(serviceName, `/api/system/services/${serviceName}/logs?days=3`);
+  };
+
+  const handleAddService = async (e) => {
+    e.preventDefault();
+    if (!newServiceName.trim()) return;
+    setServiceActionLoading('add-service');
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/system/services', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ service_name: newServiceName.trim() })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to add service');
+      showStatus('success', `Service ${newServiceName} added successfully.`);
+      setNewServiceName('');
+      fetchData();
+    } catch (err) {
+      showStatus('error', err.message);
+    } finally {
+      setServiceActionLoading(null);
+    }
+  };
+
+  const handleDeleteService = async (serviceName) => {
+    if (!confirm(`Are you sure you want to remove ${serviceName} from monitoring?`)) return;
+    setServiceActionLoading(`delete-${serviceName}`);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/system/services/${serviceName}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to delete service');
+      showStatus('success', `Service ${serviceName} removed from monitoring.`);
+      fetchData();
+    } catch (err) {
+      showStatus('error', err.message);
+    } finally {
+      setServiceActionLoading(null);
+    }
+  };
+
   const handleTriggerHeal = async () => {
     showStatus('info', 'Triggering manual connectivity healing sequence...');
     try {
@@ -375,54 +463,101 @@ export default function RecoveryTab() {
                       </div>
                     </div>
 
-                    {isInstalled && (
-                      <div className="flex gap-1.5">
-                        {isActive ? (
-                          <button
-                            onClick={() => handleControlService(svc.name, 'stop')}
-                            disabled={serviceActionLoading !== null}
-                            className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-red-500 text-gray-400 dark:text-zinc-500 hover:text-red-500 rounded-lg transition-all hover:bg-red-50/50 dark:hover:bg-red-950/10"
-                            title={`Stop ${svc.name}`}
-                          >
-                            {serviceActionLoading === `${svc.name}-stop` ? (
-                              <Loader2 size={13} className="animate-spin" />
-                            ) : (
-                              <Square size={13} />
-                            )}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleControlService(svc.name, 'start')}
-                            disabled={serviceActionLoading !== null}
-                            className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-emerald-500 text-gray-400 dark:text-zinc-500 hover:text-emerald-500 rounded-lg transition-all hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10"
-                            title={`Start ${svc.name}`}
-                          >
-                            {serviceActionLoading === `${svc.name}-start` ? (
-                              <Loader2 size={13} className="animate-spin" />
-                            ) : (
-                              <Play size={13} />
-                            )}
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => handleControlService(svc.name, 'restart')}
-                          disabled={serviceActionLoading !== null}
-                          className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-brand-orange text-gray-400 dark:text-zinc-500 hover:text-brand-orange rounded-lg transition-all hover:bg-brand-orange/5"
-                          title={`Restart ${svc.name}`}
-                        >
-                          {serviceActionLoading === `${svc.name}-restart` ? (
-                            <Loader2 size={13} className="animate-spin" />
+                    <div className="flex gap-1.5">
+                      {isInstalled && (
+                        <>
+                          {isActive ? (
+                            <button
+                              onClick={() => handleControlService(svc.name, 'stop')}
+                              disabled={serviceActionLoading !== null}
+                              className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-red-500 text-gray-400 dark:text-zinc-500 hover:text-red-500 rounded-lg transition-all hover:bg-red-50/50 dark:hover:bg-red-950/10"
+                              title={`Stop ${svc.name}`}
+                            >
+                              {serviceActionLoading === `${svc.name}-stop` ? (
+                                <Loader2 size={13} className="animate-spin" />
+                              ) : (
+                                <Square size={13} />
+                              )}
+                            </button>
                           ) : (
-                            <RefreshCw size={13} />
+                            <button
+                              onClick={() => handleControlService(svc.name, 'start')}
+                              disabled={serviceActionLoading !== null}
+                              className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-emerald-500 text-gray-400 dark:text-zinc-500 hover:text-emerald-500 rounded-lg transition-all hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10"
+                              title={`Start ${svc.name}`}
+                            >
+                              {serviceActionLoading === `${svc.name}-start` ? (
+                                <Loader2 size={13} className="animate-spin" />
+                              ) : (
+                                <Play size={13} />
+                              )}
+                            </button>
                           )}
-                        </button>
-                      </div>
-                    )}
+
+                          <button
+                            onClick={() => handleControlService(svc.name, 'restart')}
+                            disabled={serviceActionLoading !== null}
+                            className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-brand-orange text-gray-400 dark:text-zinc-500 hover:text-brand-orange rounded-lg transition-all hover:bg-brand-orange/5"
+                            title={`Restart ${svc.name}`}
+                          >
+                            {serviceActionLoading === `${svc.name}-restart` ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <RefreshCw size={13} />
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => handleViewServiceLogs(svc.name)}
+                            disabled={serviceActionLoading !== null}
+                            className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-brand-orange text-gray-400 dark:text-zinc-500 hover:text-brand-orange rounded-lg transition-all hover:bg-brand-orange/5"
+                            title={`View ${svc.name} logs`}
+                          >
+                            <FileText size={13} />
+                          </button>
+                        </>
+                      )}
+
+                      <button
+                        onClick={() => handleDeleteService(svc.name)}
+                        disabled={serviceActionLoading !== null}
+                        className="p-1.5 border border-gray-200 dark:border-zinc-850 hover:border-red-500 text-gray-400 dark:text-zinc-500 hover:text-red-500 rounded-lg transition-all hover:bg-red-50/50 dark:hover:bg-red-950/10"
+                        title={`Remove ${svc.name} from monitoring`}
+                      >
+                        {serviceActionLoading === `delete-${svc.name}` ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={13} />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
             </div>
+
+            <form onSubmit={handleAddService} className="mt-4 pt-4 border-t border-gray-100 dark:border-zinc-800 flex gap-2">
+              <input
+                type="text"
+                value={newServiceName}
+                onChange={(e) => setNewServiceName(e.target.value)}
+                placeholder="e.g. nginx.service"
+                className="flex-1 px-3 py-1.5 text-xs bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:border-brand-orange dark:text-white"
+                disabled={serviceActionLoading === 'add-service'}
+              />
+              <button
+                type="submit"
+                disabled={serviceActionLoading === 'add-service' || !newServiceName.trim()}
+                className="px-3 py-1.5 bg-brand-orange hover:bg-brand-orange-600 text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition-all disabled:opacity-50"
+              >
+                {serviceActionLoading === 'add-service' ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Plus size={13} />
+                )}
+                <span>Add</span>
+              </button>
+            </form>
           </div>
 
           {/* Section 2: Cellular Modem status (ModemManager) */}
@@ -467,11 +602,31 @@ export default function RecoveryTab() {
                   </div>
                 </div>
 
+                {/* Troubleshooting Guide if issue exists */}
+                {activeModem.troubleshooting && (
+                  <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl text-xs text-red-650 dark:text-red-400 flex items-start gap-2">
+                    <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{activeModem.troubleshooting}</span>
+                  </div>
+                )}
+
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between border-b border-gray-50 dark:border-zinc-800/50 pb-2">
                     <span className="text-gray-400 dark:text-zinc-500">State:</span>
                     <span className="font-semibold text-gray-800 dark:text-zinc-200 capitalize">{activeModem.state}</span>
                   </div>
+                  {activeModem.unlock_required && activeModem.unlock_required !== 'none' && (
+                    <div className="flex justify-between border-b border-gray-50 dark:border-zinc-800/50 pb-2">
+                      <span className="text-gray-400 dark:text-zinc-500 font-bold">Lock Status:</span>
+                      <span className="font-bold text-red-500 dark:text-red-400 capitalize">{activeModem.unlock_required}</span>
+                    </div>
+                  )}
+                  {activeModem.registration_state && activeModem.registration_state !== 'unknown' && (
+                    <div className="flex justify-between border-b border-gray-50 dark:border-zinc-800/50 pb-2">
+                      <span className="text-gray-400 dark:text-zinc-500">Reg State:</span>
+                      <span className="font-semibold text-gray-800 dark:text-zinc-200 capitalize">{activeModem.registration_state}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between border-b border-gray-50 dark:border-zinc-800/50 pb-2">
                     <span className="text-gray-400 dark:text-zinc-500">Access Tech:</span>
                     <span className="font-semibold text-gray-800 dark:text-zinc-200 uppercase">{activeModem.access_tech || 'None'}</span>
@@ -496,6 +651,17 @@ export default function RecoveryTab() {
                       {activeModem.iccid || 'N/A'}
                     </span>
                   </div>
+                </div>
+
+                <div className="border-t border-gray-150/40 dark:border-zinc-800/50 pt-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={handleViewModemLogs}
+                    className="w-full py-2 px-3 bg-gray-50 hover:bg-gray-100 dark:bg-zinc-850 dark:hover:bg-zinc-800 text-gray-700 dark:text-zinc-300 font-semibold rounded-xl text-[11px] transition-all flex items-center justify-center gap-1.5 border border-gray-100 dark:border-zinc-800 shadow-sm"
+                  >
+                    <FileText size={13} className="text-brand-orange" />
+                    <span>View Modem Logs</span>
+                  </button>
                 </div>
               </div>
             ) : (
@@ -996,6 +1162,86 @@ export default function RecoveryTab() {
           </div>
         </div>
       </div>
+
+      {/* Universal Logs Modal */}
+      {logsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <FileText className="text-brand-orange" size={20} />
+                <span>{logTitle} Activity Logs</span>
+              </h3>
+              <button
+                onClick={() => {
+                  setLogsModalOpen(false);
+                  setLogsList(null);
+                }}
+                className="text-gray-400 hover:text-gray-650 dark:hover:text-zinc-200 text-sm font-semibold"
+              >
+                Close
+              </button>
+            </div>
+
+            {logsLoading ? (
+              <div className="flex-1 min-h-[300px] flex flex-col items-center justify-center gap-3">
+                <Loader2 size={36} className="animate-spin text-brand-orange" />
+                <span className="text-gray-500 dark:text-zinc-400 font-medium">Loading system logs...</span>
+              </div>
+            ) : logsList ? (
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Date Tabs */}
+                <div className="flex border-b border-gray-100 dark:border-zinc-800 mb-4 overflow-x-auto gap-2">
+                  {Object.keys(logsList).map((date) => {
+                    const isActive = activeLogTab === date;
+                    return (
+                      <button
+                        key={date}
+                        onClick={() => setActiveLogTab(date)}
+                        className={`py-2.5 px-4 text-xs font-bold border-b-2 transition-all ${
+                          isActive
+                            ? 'border-brand-orange text-brand-orange'
+                            : 'border-transparent text-gray-400 hover:text-gray-650 dark:hover:text-zinc-300'
+                        }`}
+                      >
+                        {date}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Log Lines Container */}
+                <div className="flex-1 bg-gray-50 dark:bg-zinc-950/40 border border-gray-100 dark:border-zinc-850 rounded-xl p-4 overflow-y-auto font-mono text-[10px] space-y-2 select-text">
+                  {logsList[activeLogTab] && logsList[activeLogTab].length > 0 ? (
+                    logsList[activeLogTab].map((line, idx) => {
+                      const isError = line.toLowerCase().includes('error') || line.toLowerCase().includes('failed');
+                      const isWarning = line.toLowerCase().includes('warning') || line.toLowerCase().includes('warn');
+                      
+                      let colorClass = 'text-gray-600 dark:text-zinc-400';
+                      if (isError) colorClass = 'text-red-500 dark:text-red-400 font-semibold';
+                      else if (isWarning) colorClass = 'text-amber-500 dark:text-amber-400 font-semibold';
+
+                      return (
+                        <div key={idx} className={`${colorClass} whitespace-pre-wrap break-all border-b border-gray-100/50 dark:border-zinc-900/10 pb-1 last:border-0 last:pb-0`}>
+                          {line}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-gray-400 dark:text-zinc-650 text-xs">
+                      No logs recorded for this day.
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-[300px] flex items-center justify-center text-gray-400">
+                Failed to load logs.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

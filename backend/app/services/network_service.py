@@ -629,6 +629,9 @@ class NetworkService:
                 "ip": "10.64.23.105",
                 "imei": "862309047281923",
                 "iccid": "8962019283719283712",
+                "unlock_required": "none",
+                "registration_state": "home",
+                "troubleshooting": None,
                 "success": True
             }
         
@@ -653,19 +656,43 @@ class NetworkService:
                 except Exception:
                     pass
 
+                state = generic.get("state", "unknown")
+                unlock_required = generic.get("unlock-required", "none")
+                registration_state = tgpp.get("registration-state", "unknown")
+                operator_name = tgpp.get("operator-name", "Unknown")
+
+                # Generate dynamic troubleshooting guide
+                trouble = None
+                if unlock_required != "none":
+                    trouble = f"SIM card is locked. PIN/PUK required ({unlock_required}). Please unlock the SIM card."
+                elif state == "disabled":
+                    trouble = "Modem is disabled. You can enable it using the command: nmcli radio wwan on"
+                elif state == "searching":
+                    trouble = "Searching for network carrier signal. Check physical antenna connections and placement."
+                elif registration_state == "denied":
+                    trouble = "Network registration denied by operator. Check SIM subscription status or network coverage."
+                elif state == "failed":
+                    trouble = "Modem is in failed state. Try resetting the USB device to reinitialize it."
+                elif not operator_name or operator_name == "Unknown":
+                    if state in ("connecting", "registered"):
+                        trouble = "Modem is registered but not connected to internet. Verify APN settings."
+
                 return {
                     "id": modem_id,
                     "manufacturer": generic.get("manufacturer", "Unknown"),
                     "model": generic.get("model", "Unknown"),
-                    "state": generic.get("state", "unknown"),
+                    "state": state,
                     "power_state": generic.get("power-state", "unknown"),
                     "signal_quality": str(generic.get("signal-quality", {}).get("value", "0")),
                     "access_tech": ", ".join(generic.get("access-technologies", [])),
-                    "operator_name": tgpp.get("operator-name", "Unknown"),
+                    "operator_name": operator_name,
                     "operator_code": tgpp.get("operator-code", "Unknown"),
                     "ip": ip_addr,
                     "imei": tgpp.get("imei", ""),
                     "iccid": modem.get("sim", {}).get("iccid", "Unknown"),
+                    "unlock_required": unlock_required,
+                    "registration_state": registration_state,
+                    "troubleshooting": trouble,
                     "success": True
                 }
         except Exception:
@@ -674,6 +701,9 @@ class NetworkService:
         try:
             output = subprocess.check_output(["mmcli", "-m", modem_id], text=True).strip()
             info = {"id": modem_id, "success": True}
+            
+            unlock_required = "none"
+            registration_state = "unknown"
             
             for line in output.split("\n"):
                 if ":" not in line:
@@ -703,7 +733,33 @@ class NetworkService:
                     info["imei"] = val
                 elif "iccid" in key:
                     info["iccid"] = val
+                elif "unlock required" in key or "unlock-required" in key:
+                    unlock_required = val
+                elif "registration" in key and "state" in key:
+                    registration_state = val
             
+            state = info.get("state", "unknown")
+            operator_name = info.get("operator_name", "")
+            
+            # Generate dynamic troubleshooting guide
+            trouble = None
+            if unlock_required != "none":
+                trouble = f"SIM card is locked. PIN/PUK required ({unlock_required}). Please unlock the SIM card."
+            elif state == "disabled":
+                trouble = "Modem is disabled. You can enable it using the command: nmcli radio wwan on"
+            elif state == "searching":
+                trouble = "Searching for network carrier signal. Check physical antenna connections and placement."
+            elif registration_state == "denied":
+                trouble = "Network registration denied by operator. Check SIM subscription status or network coverage."
+            elif state == "failed":
+                trouble = "Modem is in failed state. Try resetting the USB device to reinitialize it."
+            elif not operator_name or operator_name == "Unknown":
+                if state in ("connecting", "registered"):
+                    trouble = "Modem is registered but not connected to internet. Verify APN settings."
+
+            info["unlock_required"] = unlock_required
+            info["registration_state"] = registration_state
+            info["troubleshooting"] = trouble
             return info
         except Exception as e:
             return {"success": False, "error": str(e)}
