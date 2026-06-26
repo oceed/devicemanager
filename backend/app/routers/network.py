@@ -44,6 +44,14 @@ class WatchdogConfigureRequest(BaseModel):
 class TailscaleToggleRequest(BaseModel):
     active: bool
 
+class TailscaleConnectRequest(BaseModel):
+    authkey: Optional[str] = None
+    advertise_exit_node: Optional[bool] = False
+    accept_routes: Optional[bool] = False
+
+class TailscaleServiceRequest(BaseModel):
+    active: bool
+
 class InterfaceToggleRequest(BaseModel):
     device: Optional[str] = None
     connection: Optional[str] = None
@@ -162,6 +170,31 @@ async def get_tailscale(current_user: str = Depends(get_current_user)):
 @router.post("/tailscale/toggle")
 async def toggle_tailscale(req: TailscaleToggleRequest, current_user: str = Depends(get_current_user)):
     result = NetworkService.toggle_tailscale(req.active)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return result
+
+@router.post("/tailscale/connect")
+async def connect_tailscale(req: TailscaleConnectRequest, current_user: str = Depends(get_current_user)):
+    result = NetworkService.connect_tailscale(
+        authkey=req.authkey,
+        advertise_exit_node=req.advertise_exit_node,
+        accept_routes=req.accept_routes
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return result
+
+@router.post("/tailscale/disconnect")
+async def disconnect_tailscale(current_user: str = Depends(get_current_user)):
+    result = NetworkService.disconnect_tailscale()
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return result
+
+@router.post("/tailscale/service")
+async def toggle_tailscale_service(req: TailscaleServiceRequest, current_user: str = Depends(get_current_user)):
+    result = NetworkService.toggle_tailscaled_service(req.active)
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("message"))
     return result

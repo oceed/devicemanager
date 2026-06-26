@@ -605,97 +605,268 @@ class NetworkService:
         except Exception as e:
             return {"success": False, "message": str(e)}
 
+    @classmethod
+    def is_tailscale_available(cls) -> bool:
+        try:
+            res = subprocess.run(["tailscale", "--version"], capture_output=True, text=True, timeout=2)
+            return res.returncode == 0
+        except Exception:
+            return False
+
     @staticmethod
-    def is_tailscale_available() -> bool:
-        return shutil.which("tailscale") is not None
+    def _extract_login_url(text: str) -> str:
+        match = re.search(r'https://login\.tailscale\.com/a/[a-zA-Z0-9]+', text)
+        if match:
+            return match.group(0)
+        return ""
 
     @classmethod
     def get_tailscale_status(cls) -> dict:
         if not cls.is_tailscale_available():
             return {
                 "installed": False,
+                "service_active": False,
                 "active": False,
                 "ip": "",
+                "ip6": "",
                 "node_name": "",
-                "status": "Not Installed"
+                "login_name": "",
+                "login_url": "",
+                "status": "Not Installed",
+                "peers": []
             }
+
+        service_active = False
+        try:
+            active_check = subprocess.run(["systemctl", "is-active", "tailscaled"], capture_output=True, text=True, timeout=2)
+            service_active = active_check.stdout.strip() == "active"
+        except Exception:
+            pass
+
+        if not service_active:
+            return {
+                "installed": True,
+                "service_active": False,
+                "active": False,
+                "ip": "",
+                "ip6": "",
+                "node_name": "",
+                "login_name": "",
+                "login_url": "",
+                "status": "Service Stopped",
+                "peers": []
+            }
+
+        try:
+            result_json = subprocess.run(["tailscale", "status", "--json"], capture_output=True, text=True, timeout=5)
+            if result_json.returncode == 0:
+                data = json.loads(result_json.stdout)
+                backend_state = data.get("BackendState", "")
+                active = backend_state == "Running"
+                status_str = "Connected" if active else backend_state
+                
+                self_info = data.get("Self", {})
+                ips = self_info.get("TailscaleIPs", [])
+                ip = ips[0] if len(ips) > 0 else ""
+                ip6 = ips[1] if len(ips) > 1 else ""
+                
+                user_id = self_info.get("UserID", 0)
+                user_profiles = data.get("User", {})
+                
+                login_name = ""
+                if user_id != 0:
+                    user_info = user_profiles.get(str(user_id)) or user_profiles.get(user_id)
+                    if isinstance(user_info, dict):
+                        login_name = user_info.get("LoginName", "")
+                
+                peers = []
+                peer_map = data.get("Peer", {})
+                for pid, pinfo in peer_map.items():
+                    pips = pinfo.get("TailscaleIPs", [])
+                    pips_v4 = [pip for pip in pips if ":" not in pip]
+                    p_user_id = pinfo.get("UserID", 0)
+                    p_user_info = user_profiles.get(str(p_user_id)) or user_profiles.get(p_user_id)
+                    p_login = p_user_info.get("LoginName", "") if isinstance(p_user_info, dict) else ""
+                    
+                    peers.append({
+                        "ip": pips_v4[0] if pips_v4 else (pips[0] if pips else ""),
+                        "node_name": pinfo.get("HostName", "").split(".")[0],
+                        "user": p_login,
+                        "os": pinfo.get("OS", "").lower(),
+                        "active": pinfo.get("Active", False),
+                        "online": pinfo.get("Online", False)
+                    })
+                
+                peers.sort(key=lambda x: x["node_name"].lower())
+                
+                return {
+                    "installed": True,
+                    "service_active": True,
+                    "active": active,
+                    "status": status_str,
+                    "ip": ip,
+                    "ip6": ip6,
+                    "node_name": self_info.get("HostName", "").split(".")[0],
+                    "login_name": login_name,
+                    "login_url": data.get("AuthURL", ""),
+                    "peers": peers
+                }
+        except Exception:
+            pass
+
         try:
             result = subprocess.run(["tailscale", "status"], capture_output=True, text=True, timeout=5)
+            combined = result.stdout.strip() + "\n" + result.stderr.strip()
+            
             if result.returncode != 0:
-                is_active = False
-                try:
-                    active_check = subprocess.run(["systemctl", "is-active", "tailscaled"], capture_output=True, text=True)
-                    is_active = active_check.stdout.strip() == "active"
-                except Exception:
-                    pass
-                return {
-                    "installed": True,
-                    "active": is_active,
-                    "ip": "",
-                    "node_name": "",
-                    "status": "Disconnected or Stopped"
-                }
-            
-            lines = result.stdout.strip().split("\n")
-            if not lines or not lines[0].strip():
-                return {
-                    "installed": True,
-                    "active": True,
-                    "ip": "",
-                    "node_name": "",
-                    "status": "Active (No connections)"
-                }
-            
-            self_line = None
-            for line in lines:
-                if "self" in line:
-                    self_line = line
-                    break
-            
-            if not self_line and lines:
-                self_line = lines[0]
+                status_str = "Disconnected"
+                if "logged out" in combined.lower() or "login" in combined.lower() or "auth" in combined.lower():
+                    status_str = "Needs Login"
                 
-            parts = self_line.split()
-            if len(parts) >= 2:
-                ip = parts[0]
-                node_name = parts[1]
+                login_url = cls._extract_login_url(combined)
                 return {
                     "installed": True,
-                    "active": True,
-                    "ip": ip,
-                    "node_name": node_name,
-                    "status": "Connected"
+                    "service_active": True,
+                    "active": False,
+                    "status": status_str,
+                    "ip": "",
+                    "ip6": "",
+                    "node_name": "",
+                    "login_name": "",
+                    "login_url": login_url,
+                    "peers": []
                 }
+
+            lines = [line.strip() for line in result.stdout.split("\n") if line.strip()]
+            self_node = {}
+            peers = []
+            
+            for idx, line in enumerate(lines):
+                parts = line.split()
+                if len(parts) >= 2:
+                    ip = parts[0]
+                    node_name = parts[1].split(".")[0]
+                    user = parts[2] if len(parts) >= 3 else ""
+                    os_name = parts[3] if len(parts) >= 4 else ""
+                    status_info = " ".join(parts[4:]) if len(parts) > 4 else ""
+                    
+                    is_self = "-" in status_info or idx == 0
+                    
+                    node = {
+                        "ip": ip,
+                        "node_name": node_name,
+                        "user": user,
+                        "os": os_name.lower(),
+                        "active": "active" in status_info,
+                        "online": "-" not in status_info and "offline" not in status_info
+                    }
+                    
+                    if is_self:
+                        self_node = node
+                    else:
+                        peers.append(node)
+                        
+            peers.sort(key=lambda x: x["node_name"].lower())
             
             return {
                 "installed": True,
+                "service_active": True,
                 "active": True,
-                "ip": "",
-                "node_name": "",
-                "status": "Active"
+                "status": "Connected",
+                "ip": self_node.get("ip", ""),
+                "ip6": "",
+                "node_name": self_node.get("node_name", ""),
+                "login_name": self_node.get("user", ""),
+                "login_url": "",
+                "peers": peers
             }
         except Exception as e:
             return {
                 "installed": True,
+                "service_active": True,
                 "active": False,
                 "ip": "",
+                "ip6": "",
                 "node_name": "",
-                "status": f"Error: {str(e)}"
+                "login_name": "",
+                "login_url": "",
+                "status": f"Error: {str(e)}",
+                "peers": []
             }
 
     @classmethod
-    def toggle_tailscale(cls, active: bool) -> dict:
+    def connect_tailscale(cls, authkey: str = None, advertise_exit_node: bool = False, accept_routes: bool = False) -> dict:
         if not cls.is_tailscale_available():
             return {"success": False, "message": "Tailscale is not installed on this system."}
         try:
-            cmd = ["sudo", "tailscale", "up" if active else "down"]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            cmd = ["tailscale", "up"]
+            if authkey and authkey.strip():
+                cmd.extend(["--authkey", authkey.strip()])
+            if advertise_exit_node:
+                cmd.extend(["--advertise-exit-node"])
+            if accept_routes:
+                cmd.extend(["--accept-routes"])
+
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+                if result.returncode == 0:
+                    return {"success": True, "message": "Tailscale connected successfully."}
+                else:
+                    output = result.stdout + "\n" + result.stderr
+                    login_url = cls._extract_login_url(output)
+                    if login_url:
+                        return {
+                            "success": True,
+                            "needs_login": True,
+                            "login_url": login_url,
+                            "message": "Click the login URL to authenticate Tailscale."
+                        }
+                    return {"success": False, "message": f"Tailscale error: {result.stderr.strip()}"}
+            except subprocess.TimeoutExpired as e:
+                output = (e.stdout or "") + "\n" + (e.stderr or "")
+                login_url = cls._extract_login_url(output)
+                if login_url:
+                    return {
+                        "success": True,
+                        "needs_login": True,
+                        "login_url": login_url,
+                        "message": "Click the login URL to authenticate Tailscale."
+                    }
+                return {"success": False, "message": "Tailscale authentication timed out."}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    @classmethod
+    def disconnect_tailscale(cls) -> dict:
+        if not cls.is_tailscale_available():
+            return {"success": False, "message": "Tailscale is not installed on this system."}
+        try:
+            result = subprocess.run(["tailscale", "down"], capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
-                return {"success": True, "message": f"Tailscale successfully turned {'on' if active else 'off'}."}
+                return {"success": True, "message": "Tailscale disconnected successfully."}
             else:
                 return {"success": False, "message": f"Tailscale error: {result.stderr.strip()}"}
         except Exception as e:
             return {"success": False, "message": str(e)}
+
+    @classmethod
+    def toggle_tailscaled_service(cls, active: bool) -> dict:
+        action = "start" if active else "stop"
+        try:
+            result = subprocess.run(["systemctl", action, "tailscaled"], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                return {"success": True, "message": f"Tailscale service {action}ed successfully."}
+            else:
+                return {"success": False, "message": f"Service error: {result.stderr.strip()}"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    @classmethod
+    def toggle_tailscale(cls, active: bool) -> dict:
+        if active:
+            return cls.connect_tailscale()
+        else:
+            return cls.disconnect_tailscale()
 
     @staticmethod
     def is_mmcli_available() -> bool:
