@@ -1093,5 +1093,151 @@ class NetworkService:
         except Exception as e:
             return {"success": False, "message": str(e)}
 
+    @classmethod
+    def get_l2tp_status(cls) -> dict:
+        if not cls.is_nmcli_available():
+            return {
+                "connected": False,
+                "server": "",
+                "username": "",
+                "ip": "",
+                "interface": ""
+            }
+        try:
+            # Check active connections
+            active_out = subprocess.check_output(
+                ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+                text=True
+            ).strip().split("\n")
+            
+            l2tp_conn_dev = None
+            for line in active_out:
+                if not line.strip():
+                    continue
+                parts = line.split(":")
+                if len(parts) >= 3 and parts[0] == "l2tp-client":
+                    l2tp_conn_dev = parts[2]
+                    break
+            
+            # Retrieve configuration details (server and user)
+            server = ""
+            username = ""
+            try:
+                show_out = subprocess.check_output(
+                    ["nmcli", "-s", "-t", "-f", "vpn.data", "connection", "show", "l2tp-client"],
+                    text=True
+                ).strip()
+                data_part = show_out.replace("vpn.data:", "").strip()
+                gateway_match = re.search(r"gateway\s*=\s*([^,\s]+)", data_part)
+                user_match = re.search(r"user\s*=\s*([^,\s]+)", data_part)
+                if gateway_match:
+                    server = gateway_match.group(1)
+                if user_match:
+                    username = user_match.group(1)
+            except Exception:
+                pass
+
+            if l2tp_conn_dev:
+                # Connected! Let's get IP
+                ip = ""
+                try:
+                    ip_out = subprocess.check_output(
+                        ["nmcli", "-t", "-f", "IP4.ADDRESS", "device", "show", l2tp_conn_dev],
+                        text=True
+                    ).strip()
+                    for ip_line in ip_out.split("\n"):
+                        if ip_line.startswith("IP4.ADDRESS[1]"):
+                            ip = ip_line.split(":")[1].split("/")[0]
+                except Exception:
+                    pass
+                
+                return {
+                    "connected": True,
+                    "server": server,
+                    "username": username,
+                    "ip": ip,
+                    "interface": l2tp_conn_dev
+                }
+            else:
+                return {
+                    "connected": False,
+                    "server": server,
+                    "username": username,
+                    "ip": "",
+                    "interface": ""
+                }
+        except Exception:
+            return {
+                "connected": False,
+                "server": "",
+                "username": "",
+                "ip": "",
+                "interface": ""
+            }
+
+    @classmethod
+    def connect_l2tp(cls, server: str, username: str, password: str) -> dict:
+        if not cls.is_nmcli_available():
+            return {"success": True, "message": "Mock: L2TP client connected successfully."}
+        try:
+            # 1. Delete existing l2tp-client connection if it exists
+            subprocess.run(["nmcli", "connection", "delete", "l2tp-client"], capture_output=True)
+            
+            # 2. Add connection with ipsec-enabled=no
+            add_cmd = [
+                "nmcli", "connection", "add",
+                "type", "vpn",
+                "vpn-type", "l2tp",
+                "con-name", "l2tp-client",
+                "ifname", "*",
+                "vpn.data", f"gateway={server}, user={username}, password-flags=0, ipsec-enabled=no, require-mppe=yes"
+            ]
+            res = subprocess.run(add_cmd, capture_output=True, text=True, timeout=10)
+            if res.returncode != 0:
+                # Fallback without require-mppe if require-mppe fails
+                add_cmd = [
+                    "nmcli", "connection", "add",
+                    "type", "vpn",
+                    "vpn-type", "l2tp",
+                    "con-name", "l2tp-client",
+                    "ifname", "*",
+                    "vpn.data", f"gateway={server}, user={username}, password-flags=0, ipsec-enabled=no"
+                ]
+                res = subprocess.run(add_cmd, capture_output=True, text=True, timeout=10)
+                if res.returncode != 0:
+                    return {"success": False, "message": f"Failed to create L2TP profile: {res.stderr.strip()}"}
+            
+            # 3. Add password to secrets
+            mod_cmd = [
+                "nmcli", "connection", "modify", "l2tp-client",
+                "vpn.secrets", f"password={password}"
+            ]
+            res = subprocess.run(mod_cmd, capture_output=True, text=True, timeout=10)
+            if res.returncode != 0:
+                return {"success": False, "message": f"Failed to set L2TP password: {res.stderr.strip()}"}
+                
+            # 4. Bring the connection up
+            up_res = subprocess.run(["nmcli", "connection", "up", "l2tp-client"], capture_output=True, text=True, timeout=30)
+            if up_res.returncode == 0:
+                return {"success": True, "message": "L2TP VPN connected successfully."}
+            else:
+                # Clean up if connection failed
+                subprocess.run(["nmcli", "connection", "delete", "l2tp-client"], capture_output=True)
+                return {"success": False, "message": f"L2TP connection failed: {up_res.stderr.strip()}"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    @classmethod
+    def disconnect_l2tp(cls) -> dict:
+        if not cls.is_nmcli_available():
+            return {"success": True, "message": "Mock: L2TP client disconnected."}
+        try:
+            subprocess.run(["nmcli", "connection", "down", "l2tp-client"], capture_output=True, text=True, timeout=15)
+            subprocess.run(["nmcli", "connection", "delete", "l2tp-client"], capture_output=True, text=True, timeout=10)
+            return {"success": True, "message": "L2TP VPN disconnected successfully."}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+
 
 

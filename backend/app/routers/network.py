@@ -219,4 +219,29 @@ async def disconnect_wifi(current_user: str = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=result.get("message"))
     return result
 
+class L2tpConnectRequest(BaseModel):
+    server: str
+    username: str
+    password: str
+
+# L2TP VPN Client Endpoints
+@router.get("/l2tp")
+async def get_l2tp(current_user: str = Depends(get_current_user)):
+    return NetworkService.get_l2tp_status()
+
+@router.post("/l2tp/connect")
+async def connect_l2tp(req: L2tpConnectRequest, current_user: str = Depends(get_current_user)):
+    result = NetworkService.connect_l2tp(req.server, req.username, req.password)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return result
+
+@router.post("/l2tp/disconnect")
+async def disconnect_l2tp(current_user: str = Depends(get_current_user)):
+    result = NetworkService.disconnect_l2tp()
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return result
+
+
 

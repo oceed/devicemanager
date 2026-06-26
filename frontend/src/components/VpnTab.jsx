@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 export default function VpnTab() {
-  const [activeSubTab, setActiveSubTab] = useState('vpn'); // 'vpn' or 'tailscale'
+  const [activeSubTab, setActiveSubTab] = useState('vpn'); // 'vpn', 'tailscale', or 'l2tp'
   const [vpns, setVpns] = useState([]);
   const [vpnName, setVpnName] = useState('');
   const [configContent, setConfigContent] = useState('');
@@ -55,6 +55,21 @@ export default function VpnTab() {
   const [showAuthKey, setShowAuthKey] = useState(false);
   const [advertiseExitNode, setAdvertiseExitNode] = useState(false);
   const [acceptRoutes, setAcceptRoutes] = useState(false);
+
+  // L2TP Client State
+  const [l2tp, setL2tp] = useState({
+    connected: false,
+    server: '',
+    username: '',
+    ip: '',
+    interface: ''
+  });
+  const [l2tpLoading, setL2tpLoading] = useState(true);
+  const [l2tpSubmitting, setL2tpSubmitting] = useState(false);
+  const [l2tpServer, setL2tpServer] = useState('');
+  const [l2tpUsername, setL2tpUsername] = useState('');
+  const [l2tpPassword, setL2tpPassword] = useState('');
+  const [showL2tpPassword, setShowL2tpPassword] = useState(false);
 
   const fetchVpns = async () => {
     try {
@@ -90,10 +105,39 @@ export default function VpnTab() {
     }
   };
 
+  const fetchL2tp = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/network/l2tp', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (data && !data.detail) {
+        setL2tp(data);
+        if (data.server) {
+          setL2tpServer(prev => prev || data.server);
+        }
+        if (data.username) {
+          setL2tpUsername(prev => prev || data.username);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setL2tpLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchVpns();
     fetchTailscale();
-    const interval = setInterval(fetchTailscale, 10000);
+    fetchL2tp();
+    const interval = setInterval(() => {
+      fetchTailscale();
+      fetchL2tp();
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -195,6 +239,72 @@ export default function VpnTab() {
       setStatusMsg({ type: 'error', text: err.message });
     } finally {
       setTailscaleSubmitting(false);
+    }
+  };
+
+  const handleConnectL2tp = async (e) => {
+    if (e) e.preventDefault();
+    if (!l2tpServer || !l2tpUsername || !l2tpPassword) {
+      setStatusMsg({ type: 'error', text: 'Please fill in all L2TP credentials (Server, Username, Password).' });
+      return;
+    }
+    setL2tpSubmitting(true);
+    setStatusMsg({ type: 'info', text: 'Establishing L2TP VPN connection...' });
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/network/l2tp/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          server: l2tpServer.trim(),
+          username: l2tpUsername.trim(),
+          password: l2tpPassword
+        })
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to connect L2TP VPN');
+      }
+      
+      setStatusMsg({ type: 'success', text: 'L2TP VPN connected successfully!' });
+      setL2tpPassword('');
+      fetchL2tp();
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: err.message });
+    } finally {
+      setL2tpSubmitting(false);
+    }
+  };
+
+  const handleDisconnectL2tp = async () => {
+    setL2tpSubmitting(true);
+    setStatusMsg({ type: 'info', text: 'Disconnecting L2TP VPN...' });
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/network/l2tp/disconnect', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to disconnect L2TP VPN');
+      }
+      
+      setStatusMsg({ type: 'success', text: 'L2TP VPN disconnected successfully.' });
+      fetchL2tp();
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: err.message });
+    } finally {
+      setL2tpSubmitting(false);
     }
   };
 
@@ -323,7 +433,7 @@ export default function VpnTab() {
   return (
     <div className="space-y-6">
       {/* Sub-tab Navigation */}
-      <div className="flex border-b border-gray-200 dark:border-zinc-800 pb-px mb-6 gap-2">
+      <div className="flex border-b border-gray-200 dark:border-zinc-800 pb-px mb-6 gap-2 flex-wrap">
         <button
           onClick={() => setActiveSubTab('vpn')}
           className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-200 ${
@@ -346,6 +456,17 @@ export default function VpnTab() {
           <Server size={16} />
           <span>Tailscale Mesh VPN</span>
         </button>
+        <button
+          onClick={() => setActiveSubTab('l2tp')}
+          className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-200 ${
+            activeSubTab === 'l2tp'
+              ? 'border-brand-orange text-brand-orange'
+              : 'border-transparent text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <Activity size={16} />
+          <span>L2TP VPN Client</span>
+        </button>
       </div>
 
       {statusMsg.text && (
@@ -365,7 +486,7 @@ export default function VpnTab() {
         </div>
       )}
 
-      {activeSubTab === 'vpn' ? (
+      {activeSubTab === 'vpn' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Configured VPNs List */}
           <div className="lg:col-span-2 space-y-4">
@@ -497,7 +618,9 @@ export default function VpnTab() {
             </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {activeSubTab === 'tailscale' && (
         /* Tailscale Mesh VPN View */
         <div className="space-y-6">
           {!tailscale.installed ? (
@@ -830,6 +953,177 @@ export default function VpnTab() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {activeSubTab === 'l2tp' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+          {/* Status & Connection Details */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                  <Activity size={18} className="text-brand-orange" />
+                  <span>L2TP Connection Status</span>
+                </h3>
+                
+                <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase ${
+                  l2tp.connected
+                    ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+                }`}>
+                  {l2tp.connected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-gray-100 dark:border-zinc-800">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-zinc-800/40">
+                    <span className="text-sm font-semibold text-gray-400 dark:text-zinc-500">VPN Server</span>
+                    <span className="text-sm font-bold text-gray-800 dark:text-zinc-200">
+                      {l2tp.server || '-'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-zinc-800/40">
+                    <span className="text-sm font-semibold text-gray-400 dark:text-zinc-500">Username</span>
+                    <span className="text-sm font-bold text-gray-800 dark:text-zinc-200">
+                      {l2tp.username || '-'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-zinc-800/40">
+                    <span className="text-sm font-semibold text-gray-400 dark:text-zinc-500">Assigned IP</span>
+                    <span className="text-sm font-bold font-mono text-gray-800 dark:text-zinc-200">
+                      {l2tp.ip || '-'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-zinc-800/40">
+                    <span className="text-sm font-semibold text-gray-400 dark:text-zinc-500">Interface</span>
+                    <span className="text-sm font-bold font-mono text-gray-800 dark:text-zinc-200">
+                      {l2tp.interface || '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-6">
+                {l2tp.connected ? (
+                  <button
+                    onClick={handleDisconnectL2tp}
+                    disabled={l2tpSubmitting}
+                    className="px-5 py-2.5 border border-red-200 hover:bg-red-50 dark:border-red-950/20 dark:hover:bg-red-950/30 text-red-500 font-bold rounded-xl text-sm transition-all flex items-center gap-1.5"
+                  >
+                    {l2tpSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                    <span>Disconnect L2TP</span>
+                  </button>
+                ) : (
+                  <p className="text-xs text-gray-400 dark:text-zinc-500 italic">
+                    Not currently connected to any L2TP VPN server. Use the form to establish a connection.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Credentials Form & Guide */}
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
+              <h3 className="font-bold text-base text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Key size={16} className="text-brand-orange" />
+                <span>L2TP Credentials</span>
+              </h3>
+
+              <form onSubmit={handleConnectL2tp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-zinc-400 mb-1">
+                    Server IP / Domain
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={l2tpServer}
+                    onChange={(e) => setL2tpServer(e.target.value)}
+                    placeholder="e.g. vpn.example.com"
+                    disabled={l2tp.connected || l2tpSubmitting}
+                    className="w-full px-4 py-2 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-sm font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-zinc-400 mb-1">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={l2tpUsername}
+                    onChange={(e) => setL2tpUsername(e.target.value)}
+                    placeholder="VPN username"
+                    disabled={l2tp.connected || l2tpSubmitting}
+                    className="w-full px-4 py-2 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-sm font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-zinc-400 mb-1">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showL2tpPassword ? 'text' : 'password'}
+                      required
+                      value={l2tpPassword}
+                      onChange={(e) => setL2tpPassword(e.target.value)}
+                      placeholder="••••••••"
+                      disabled={l2tp.connected || l2tpSubmitting}
+                      className="w-full pl-4 pr-10 py-2 bg-white dark:bg-zinc-900/50 border border-gray-300 dark:border-zinc-800 rounded-xl text-gray-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange text-sm font-semibold font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowL2tpPassword(!showL2tpPassword)}
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300"
+                    >
+                      {showL2tpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={l2tpSubmitting || l2tp.connected}
+                  className="w-full mt-2 py-2.5 bg-brand-orange hover:bg-brand-orange-600 text-white font-bold rounded-xl text-sm transition-all hover:shadow-md hover:shadow-brand-orange/15 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {l2tpSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                  <span>Connect L2TP</span>
+                </button>
+              </form>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
+              <h3 className="font-bold text-sm text-gray-900 dark:text-white uppercase tracking-wider">
+                L2TP Reference
+              </h3>
+              
+              <div className="text-xs text-gray-500 dark:text-zinc-400 space-y-3 leading-relaxed">
+                <p>
+                  This tab manages standard plain L2TP client tunnels. It does not employ IPsec encryption (plain L2TP).
+                </p>
+                <div className="p-3 bg-gray-50 dark:bg-zinc-800/40 rounded-xl space-y-2">
+                  <span className="font-bold text-gray-700 dark:text-zinc-300 block">Host Requirements:</span>
+                  <p className="text-[11px] leading-snug">
+                    L2TP configuration relies on NetworkManager on the host OS. The <b>network-manager-l2tp</b> package must be installed.
+                  </p>
+                  <p className="text-[11px] font-mono bg-white dark:bg-zinc-900 p-1.5 rounded border border-gray-100 dark:border-zinc-800/60 break-all">
+                    sudo apt install network-manager-l2tp
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
